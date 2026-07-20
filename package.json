@@ -1,0 +1,16 @@
+{
+  "name": "lifeflow",
+  "version": "1.0.0",
+  "description": "LifeFlow - Blood Bank Management System (Full Stack)",
+  "scripts": {
+    "install-server": "cd server && npm install",
+    "install-client": "cd client && npm install",
+    "install-all": "npm run install-server && npm run install-client",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "seed": "npm run seed --prefix server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
