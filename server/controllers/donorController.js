@@ -23,11 +23,15 @@ const createDonor = async (req, res) => {
   }
 
   try {
+    const donorId = `DON${Date.now()}`;
     const donor = await dbResolver.create('Donor', {
+      donorId,
       name,
       bloodGroup,
       contact,
       email,
+
+
       status: status || 'Active',
       district,
       lastDonationDate: lastDonationDate ? new Date(lastDonationDate) : null

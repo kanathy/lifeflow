@@ -4,7 +4,8 @@ const DonorSchema = new mongoose.Schema({
   donorId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    default: () => `DON${Date.now()}`
   },
   name: {
     type: String,

@@ -98,6 +98,8 @@ const Donors = ({ user }) => {
     setModalOpen(true);
   };
 
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const endpoint = editMode ? `/api/donors/${selectedId}` : '/api/donors';
@@ -111,12 +113,21 @@ const Donors = ({ user }) => {
       },
       body: JSON.stringify(form)
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(err => { throw new Error(err.message || 'Error saving donor'); });
+        }
+        return res.json();
+      })
       .then(() => {
+        setFeedbackMsg('Donor saved successfully');
         setModalOpen(false);
         fetchDonors();
       })
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error(err);
+        setFeedbackMsg(`Error: ${err.message}`);
+      });
   };
 
   const handleDelete = (id) => {
@@ -138,6 +149,11 @@ const Donors = ({ user }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {feedbackMsg && (
+        <div style={{ padding: '8px 12px', backgroundColor: feedbackMsg.startsWith('Error') ? 'var(--color-danger-light)' : 'var(--color-success-light)', color: feedbackMsg.startsWith('Error') ? 'var(--color-danger)' : 'var(--color-success)', borderRadius: '4px', marginBottom: '12px' }}>
+          {feedbackMsg}
+        </div>
+      )}
       <div className="flex-between">
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Outfit' }}>Donors Network</h1>

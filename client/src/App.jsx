@@ -79,7 +79,7 @@ const App = () => {
                   <Route path="/notifications" element={<Notifications user={user} />} />
                   <Route path="/reports" element={<Reports user={user} />} />
                   <Route path="/users" element={<UsersRoles user={user} />} />
-                  <Route path="/settings" element={<Settings user={user} />} />
+                  <Route path="/settings" element={<Settings user={user} logout={logout} />} />
                   
                   {/* Default dashboard redirect */}
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />

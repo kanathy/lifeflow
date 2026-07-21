@@ -17,7 +17,11 @@ import {
   Moon,
   Menu,
   X,
-  Search
+  Search,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  Filter
 } from 'lucide-react';
 
 const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
@@ -27,6 +31,7 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
   const [notiOpen, setNotiOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [reportsExpanded, setReportsExpanded] = useState(true);
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -37,7 +42,20 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
     { name: 'District Monitoring', path: '/monitoring', icon: MapPin },
     { name: 'Prediction', path: '/prediction', icon: TrendingUp },
     { name: 'Notifications', path: '/notifications', icon: Bell, badgeCount: true },
-    { name: 'Reports', path: '/reports', icon: FileText },
+    { 
+      name: 'Reports', 
+      path: '/reports', 
+      icon: FileText,
+      hasSubmenu: true,
+      subItems: [
+        { name: 'Incident Reports', path: '/reports?tab=incident' },
+        { name: 'Inventory Reports', path: '/reports?tab=inventory' },
+        { name: 'Donation Reports', path: '/reports?tab=donation' },
+        { name: 'Request Reports', path: '/reports?tab=request' },
+        { name: 'Usage Reports', path: '/reports?tab=usage' },
+        { name: 'Summary Reports', path: '/reports?tab=summary' }
+      ]
+    },
     { name: 'Users & Roles', path: '/users', icon: UserCheck, adminOnly: true },
     { name: 'Settings', path: '/settings', icon: Settings }
   ];
@@ -59,9 +77,14 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
     }
   }, [user, location.pathname]);
 
-  const handleMenuClick = (path) => {
-    navigate(path);
-    setSidebarOpen(false);
+  const handleMenuClick = (item) => {
+    if (item.hasSubmenu) {
+      setReportsExpanded(!reportsExpanded);
+      navigate(item.path);
+    } else {
+      navigate(item.path);
+      setSidebarOpen(false);
+    }
   };
 
   const handleMarkAllRead = () => {
@@ -151,48 +174,86 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
             const Icon = item.icon;
 
             return (
-              <button
-                key={idx}
-                onClick={() => handleMenuClick(item.path)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: isActive ? 'var(--text-sidebar-active)' : 'var(--text-sidebar)',
-                  backgroundColor: isActive ? 'var(--bg-sidebar-active)' : 'transparent',
-                  textAlign: 'left'
-                }}
-                className={`sidebar-link-hover ${isActive ? 'active-link' : ''}`}
-              >
-                <Icon size={18} />
-                <span style={{ flex: 1 }}>{item.name}</span>
-                {item.badgeCount && unreadCount > 0 && (
-                  <span style={{
-                    backgroundColor: 'var(--color-primary)',
-                    color: 'white',
-                    fontSize: '0.75rem',
-                    padding: '2px 6px',
-                    borderRadius: '50px',
-                    fontWeight: 'bold'
-                  }}>
-                    {unreadCount}
-                  </span>
+              <React.Fragment key={idx}>
+                <button
+                  onClick={() => handleMenuClick(item)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    color: isActive ? 'var(--text-sidebar-active)' : 'var(--text-sidebar)',
+                    backgroundColor: isActive ? 'var(--bg-sidebar-active)' : 'transparent',
+                    textAlign: 'left'
+                  }}
+                  className={`sidebar-link-hover ${isActive ? 'active-link' : ''}`}
+                >
+                  <Icon size={18} />
+                  <span style={{ flex: 1 }}>{item.name}</span>
+                  {item.badgeCount && unreadCount > 0 && (
+                    <span style={{
+                      backgroundColor: 'var(--color-primary)',
+                      color: 'white',
+                      fontSize: '0.75rem',
+                      padding: '2px 6px',
+                      borderRadius: '50px',
+                      fontWeight: 'bold'
+                    }}>
+                      {unreadCount}
+                    </span>
+                  )}
+                  {item.hasSubmenu && (
+                    reportsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                  )}
+                  {item.badge && !item.hasSubmenu && (
+                    <span style={{
+                      backgroundColor: 'var(--color-warning)',
+                      color: 'white',
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%'
+                    }} />
+                  )}
+                </button>
+
+                {/* Render Accordion Submenu */}
+                {item.hasSubmenu && reportsExpanded && (
+                  <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '32px', gap: '2px', marginTop: '2px', marginBottom: '4px' }}>
+                    {item.subItems.map((sub, sIdx) => {
+                      const isSubActive = sIdx === 0; // Default active on Incident Reports
+                      return (
+                        <button
+                          key={sIdx}
+                          onClick={() => {
+                            navigate(sub.path);
+                            setSidebarOpen(false);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            fontSize: '0.8rem',
+                            fontWeight: isSubActive ? 700 : 500,
+                            color: isSubActive ? '#e11d48' : 'var(--text-secondary)',
+                            backgroundColor: isSubActive ? 'rgba(225, 29, 72, 0.08)' : 'transparent',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <span style={{ fontSize: '1rem', lineHeight: '0.5' }}>•</span>
+                          <span>{sub.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-                {item.badge && (
-                  <span style={{
-                    backgroundColor: 'var(--color-warning)',
-                    color: 'white',
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%'
-                  }} />
-                )}
-              </button>
+              </React.Fragment>
             );
           })}
 

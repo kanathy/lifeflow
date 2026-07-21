@@ -5,13 +5,13 @@ const BloodInventory = ({ user }) => {
   const [inventory, setInventory] = useState([]);
   const [filteredInventory, setFilteredInventory] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDistrict, setFilterDistrict] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
   const [filterRh, setFilterRh] = useState('');
-  
+
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);

@@ -8,7 +8,7 @@ const ReportSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['Inventory', 'Usage', 'Donor', 'Requests', 'Summary']
+    enum: ['Inventory', 'Usage', 'Donor', 'Requests', 'Summary', 'Accident', 'Disease']
   },
   dateRange: {
     type: String,

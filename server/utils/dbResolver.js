@@ -6,7 +6,9 @@ const EmergencyRequest = require('../models/EmergencyRequest');
 const Notification = require('../models/Notification');
 const Prediction = require('../models/Prediction');
 const Report = require('../models/Report');
-const mockDb = require('./mockDb');
+const AccidentCase = require('../models/AccidentCase');
+const DiseaseCase = require('../models/DiseaseCase');
+const Setting = require('../models/Setting');
 
 const models = {
   User,
@@ -16,83 +18,62 @@ const models = {
   EmergencyRequest,
   Notification,
   Prediction,
-  Report
-};
-
-const getCollectionName = (modelName) => {
-  if (modelName === 'BloodInventory') return 'inventory';
-  if (modelName === 'EmergencyRequest') return 'requests';
-  if (modelName === 'Prediction') return 'predictions';
-  if (modelName === 'Report') return 'reports';
-  
-  // standard pluralization
-  const lower = modelName.toLowerCase();
-  if (lower.endsWith('y')) {
-    return lower.slice(0, -1) + 'ies';
-  }
-  return lower + 's';
+  Report,
+  AccidentCase,
+  DiseaseCase,
+  Setting
 };
 
 const dbResolver = {
   find: async (modelName, query = {}) => {
-    if (process.env.USE_MOCK_DB === 'true') {
-      const col = getCollectionName(modelName);
-      return mockDb.find(col);
-    }
-    return models[modelName].find(query);
+    return models[modelName].find(query).lean();
   },
 
   findOne: async (modelName, query = {}) => {
-    if (process.env.USE_MOCK_DB === 'true') {
-      const col = getCollectionName(modelName);
-      return mockDb.findOne(col, query);
-    }
-    return models[modelName].findOne(query);
+    return models[modelName].findOne(query).lean();
   },
 
   findById: async (modelName, id) => {
-    if (process.env.USE_MOCK_DB === 'true') {
-      const col = getCollectionName(modelName);
-      return mockDb.findById(col, id);
-    }
-    return models[modelName].findById(id);
+    return models[modelName].findById(id).lean();
   },
 
   create: async (modelName, payload) => {
-    if (process.env.USE_MOCK_DB === 'true') {
-      const col = getCollectionName(modelName);
-      return mockDb.create(col, payload);
-    }
-    return models[modelName].create(payload);
+    const doc = await models[modelName].create(payload);
+    return doc.toObject();
   },
 
   findByIdAndUpdate: async (modelName, id, payload) => {
-    if (process.env.USE_MOCK_DB === 'true') {
-      const col = getCollectionName(modelName);
-      return mockDb.findByIdAndUpdate(col, id, payload);
-    }
-    return models[modelName].findByIdAndUpdate(id, payload, { new: true });
+    return models[modelName].findByIdAndUpdate(id, payload, { new: true }).lean();
   },
 
   findByIdAndDelete: async (modelName, id) => {
-    if (process.env.USE_MOCK_DB === 'true') {
-      const col = getCollectionName(modelName);
-      return mockDb.findByIdAndDelete(col, id);
-    }
-    return models[modelName].findByIdAndDelete(id);
+    return models[modelName].findByIdAndDelete(id).lean();
   },
 
   getSettings: async () => {
-    if (process.env.USE_MOCK_DB === 'true') {
-      return mockDb.getSettings();
+    let setting = await Setting.findOne().lean();
+    if (!setting) {
+      setting = await Setting.create({
+        systemName: 'LifeFlow Blood Bank Management System',
+        organization: 'National Blood Transfusion Service',
+        contactEmail: 'info@lifeflow.lk',
+        contactPhone: '011 268 1111',
+        address: '123, Keas Road, Colombo 08, Sri Lanka'
+      });
+      setting = setting.toObject();
     }
-    // settings fallback in mongoose (we can store it in a single settings entry or mock)
-    // for simplicity, we mock settings or use a mockDb file
-    return mockDb.getSettings();
+    return setting;
   },
 
   updateSettings: async (payload) => {
-    return mockDb.updateSettings(payload);
+    let setting = await Setting.findOne();
+    if (!setting) {
+      setting = await Setting.create(payload);
+    } else {
+      Object.assign(setting, payload);
+      await setting.save();
+    }
+    return setting.toObject();
   }
 };
 

@@ -15,6 +15,8 @@ const EmergencyRequest = require('../models/EmergencyRequest');
 const Notification = require('../models/Notification');
 const Prediction = require('../models/Prediction');
 const Report = require('../models/Report');
+const AccidentCase = require('../models/AccidentCase');
+const DiseaseCase = require('../models/DiseaseCase');
 
 const seedData = {
   users: [
@@ -74,6 +76,22 @@ const seedData = {
     { reportName: 'Monthly Blood Inventory Report', type: 'Inventory', dateRange: '01 May - 31 May 2025', generatedOn: new Date('2025-05-31T10:30:00') },
     { reportName: 'Blood Usage Report', type: 'Usage', dateRange: '01 May - 31 May 2025', generatedOn: new Date('2025-05-31T10:30:00') },
     { reportName: 'Donor Activity Report', type: 'Donor', dateRange: '01 May - 31 May 2025', generatedOn: new Date('2025-05-31T09:45:00') }
+  ],
+  accidents: [
+    { caseId: 'ACC-2025-001', date: 'May 31, 2025', location: 'Colombo Site A', accidentType: 'Fall from Height', severity: 'Major', injured: 3, status: 'Closed', patientName: 'Rajeev Kumara', bloodGroup: 'O+', hospital: 'Colombo General Hospital', district: 'Colombo' },
+    { caseId: 'ACC-2025-002', date: 'May 29, 2025', location: 'Gampaha Site B', accidentType: 'Machinery Injury', severity: 'Minor', injured: 1, status: 'Closed', patientName: 'Sithumi Perera', bloodGroup: 'A+', hospital: 'Gampaha Hospital', district: 'Gampaha' },
+    { caseId: 'ACC-2025-003', date: 'May 27, 2025', location: 'Kandy Warehouse', accidentType: 'Vehicle Collision', severity: 'Major', injured: 2, status: 'Open', patientName: 'Nalaka Silva', bloodGroup: 'B+', hospital: 'Kandy General Hospital', district: 'Kandy' },
+    { caseId: 'ACC-2025-004', date: 'May 25, 2025', location: 'Colombo Site A', accidentType: 'Slip and Fall', severity: 'Minor', injured: 1, status: 'Closed', patientName: 'Amaya Fernando', bloodGroup: 'AB-', hospital: 'Colombo General Hospital', district: 'Colombo' },
+    { caseId: 'ACC-2025-005', date: 'May 22, 2025', location: 'Negombo Site', accidentType: 'Electrical Shock', severity: 'Major', injured: 2, status: 'Open', patientName: 'Pradeep Rajapaksa', bloodGroup: 'O-', hospital: 'Negombo Base Hospital', district: 'Gampaha' },
+    { caseId: 'ACC-2025-006', date: 'May 20, 2025', location: 'Jaffna Branch', accidentType: 'Object Hit', severity: 'Minor', injured: 1, status: 'Closed', patientName: 'Kavinda Perera', bloodGroup: 'A-', hospital: 'Jaffna Teaching Hospital', district: 'Jaffna' }
+  ],
+  diseases: [
+    { caseId: 'DIS-2025-001', date: 'May 30, 2025', location: 'Colombo Hospital', diseaseType: 'Dengue Fever', severity: 'Major', injured: 3, status: 'Open', patientName: 'Kavindi Rajapaksa', bloodGroup: 'B+', hospital: 'Lady Ridgeway Hospital', district: 'Colombo' },
+    { caseId: 'DIS-2025-002', date: 'May 28, 2025', location: 'Kandy Medical Center', diseaseType: 'Thalassemia Major', severity: 'Minor', injured: 2, status: 'Closed', patientName: 'Sumudu Jayaweera', bloodGroup: 'O+', hospital: 'Kandy General Hospital', district: 'Kandy' },
+    { caseId: 'DIS-2025-003', date: 'May 26, 2025', location: 'Colombo Ward 4', diseaseType: 'Acute Leukemia', severity: 'Fatal', injured: 5, status: 'Open', patientName: 'Nadeeka Wijesinghe', bloodGroup: 'A-', hospital: 'Colombo General Hospital', district: 'Colombo' },
+    { caseId: 'DIS-2025-004', date: 'May 24, 2025', location: 'Jaffna Clinic', diseaseType: 'Severe Anemia', severity: 'Minor', injured: 1, status: 'Closed', patientName: 'Lahiru Bandara', bloodGroup: 'AB+', hospital: 'Jaffna Teaching Hospital', district: 'Jaffna' },
+    { caseId: 'DIS-2025-005', date: 'May 21, 2025', location: 'Galle Hospital', diseaseType: 'Sickle Cell Crisis', severity: 'Major', injured: 4, status: 'Open', patientName: 'Thilini Mendis', bloodGroup: 'O-', hospital: 'Karapitiya Hospital', district: 'Galle' },
+    { caseId: 'DIS-2025-006', date: 'May 19, 2025', location: 'Batticaloa Center', diseaseType: 'Hemophilia A', severity: 'Major', injured: 2, status: 'Closed', patientName: 'Mohamed Rizwan', bloodGroup: 'B-', hospital: 'Batticaloa Hospital', district: 'Batticaloa' }
   ]
 };
 
@@ -93,7 +111,9 @@ const runSeeder = async () => {
       EmergencyRequest.deleteMany({}),
       Notification.deleteMany({}),
       Prediction.deleteMany({}),
-      Report.deleteMany({})
+      Report.deleteMany({}),
+      AccidentCase.deleteMany({}),
+      DiseaseCase.deleteMany({})
     ]);
 
     // Insert Users (Mongoose pre-save hook hashes passwords automatically)
@@ -131,6 +151,14 @@ const runSeeder = async () => {
     console.log('📋 Seeding Reports...');
     await Report.insertMany(seedData.reports);
     console.log(`   ✅ ${seedData.reports.length} reports created`);
+
+    console.log('🚗 Seeding Accident Cases...');
+    await AccidentCase.insertMany(seedData.accidents);
+    console.log(`   ✅ ${seedData.accidents.length} accident cases created`);
+
+    console.log('🧰 Seeding Disease Cases...');
+    await DiseaseCase.insertMany(seedData.diseases);
+    console.log(`   ✅ ${seedData.diseases.length} disease cases created`);
 
     console.log('\n\x1b[32m%s\x1b[0m', '🎉 Database seeded successfully!');
     console.log('\x1b[33m%s\x1b[0m', '👉 You can now login with:');

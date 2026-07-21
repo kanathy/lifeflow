@@ -20,7 +20,7 @@ app.use(express.json());
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
-    database: process.env.USE_MOCK_DB === 'true' ? 'mock-in-memory' : 'mongodb',
+    database: 'mongodb',
     timestamp: new Date()
   });
 });
