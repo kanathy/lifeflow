@@ -18,12 +18,16 @@ const getHospitals = async (req, res) => {
 const createHospital = async (req, res) => {
   const { name, district, type, contact, status } = req.body;
 
+  // allow client-provided hospitalId, otherwise generate one
+  const hospitalId = req.body.hospitalId || `HSP${Date.now()}`;
+
   if (!name || !district || !contact) {
     return res.status(400).json({ message: 'Please enter all required fields' });
   }
 
   try {
     const hospital = await dbResolver.create('Hospital', {
+      hospitalId,
       name,
       district,
       type: type || 'Government',

@@ -1,4 +1,6 @@
 const jwt = require('jsonwebtoken');
+const Hospital = require('../models/Hospital');
+const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const dbResolver = require('../utils/dbResolver');
 
@@ -109,8 +111,72 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+// @desc    Register a new hospital account (hospital + staff user)
+// @route   POST /api/auth/register-hospital
+// @access  Public
+const registerHospitalAccount = async (req, res) => {
+  const { hospitalName, district, sectorType, contactNumber, email, password } = req.body;
+
+  try {
+    // Check if email already used
+    const userExists = await dbResolver.findOne('User', { email });
+    if (userExists) {
+      return res.status(400).json({ message: 'An account with this email already exists.' });
+    }
+
+    // Auto-generate IDs
+    const timestamp = Date.now();
+    const hospitalId = `HOSP-${timestamp}`;
+    const userId = `USR-${timestamp}`;
+
+    // Create Hospital record
+    const hospitalPayload = {
+      hospitalId,
+      name: hospitalName,
+      district,
+      type: sectorType || 'Government',
+      contact: contactNumber,
+      status: 'Active'
+    };
+    const hospital = await dbResolver.create('Hospital', hospitalPayload);
+
+    // Hash password if mock DB
+    let hashedPassword = password;
+    if (process.env.USE_MOCK_DB === 'true') {
+      const bcryptLib = require('bcryptjs');
+      hashedPassword = bcryptLib.hashSync(password, 10);
+    }
+
+    // Create User account linked to hospital
+    const userPayload = {
+      userId,
+      name: hospitalName,
+      email,
+      password: hashedPassword,
+      role: 'Hospital Staff',
+      status: 'Active'
+    };
+    const user = await dbResolver.create('User', userPayload);
+
+    res.status(201).json({
+      message: 'Hospital account created successfully.',
+      hospitalId: hospital.hospitalId,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        token: generateToken(user._id)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   authUser,
-  getUserProfile
+  getUserProfile,
+  registerHospitalAccount
 };

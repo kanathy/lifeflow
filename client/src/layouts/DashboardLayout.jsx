@@ -48,12 +48,11 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
       icon: FileText,
       hasSubmenu: true,
       subItems: [
-        { name: 'Incident Reports', path: '/reports?tab=incident' },
-        { name: 'Inventory Reports', path: '/reports?tab=inventory' },
-        { name: 'Donation Reports', path: '/reports?tab=donation' },
-        { name: 'Request Reports', path: '/reports?tab=request' },
-        { name: 'Usage Reports', path: '/reports?tab=usage' },
-        { name: 'Summary Reports', path: '/reports?tab=summary' }
+        { name: 'Accident Reports', path: '/reports?tab=accident' },
+        { name: 'Disease Reports', path: '/reports?tab=disease' },
+        { name: 'Donor Reports', path: '/reports?tab=donor' },
+        { name: 'Hospital Reports', path: '/reports?tab=hospital' },
+        { name: 'Blood Inventory Reports', path: '/reports?tab=inventory' }
       ]
     },
     { name: 'Users & Roles', path: '/users', icon: UserCheck, adminOnly: true },
@@ -257,26 +256,7 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
             );
           })}
 
-          {/* Logout Button */}
-          <button
-            onClick={handleLogoutClick}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              color: 'var(--text-sidebar)',
-              marginTop: 'auto',
-              textAlign: 'left'
-            }}
-          >
-            <LogOut size={18} />
-            <span>Logout</span>
-          </button>
+          {/* Logout button removed from nav; moved into banner below */}
         </nav>
 
         {/* Heartbeat indicator Banner */}
@@ -297,6 +277,29 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
             <Droplet size={32} color="#ffffff" fill="#ffffff" style={{ animation: 'pulse 2s infinite', marginBottom: '8px' }} />
             <h4 style={{ fontSize: '0.8rem', fontWeight: 700, margin: '2px 0 6px 0' }}>Every Drop Counts</h4>
             <p style={{ fontSize: '0.65rem', opacity: 0.9 }}>Donate Blood, Save Lives</p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', width: '100%' }}>
+              <button
+                onClick={handleLogoutClick}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#ffffff',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  color: '#c51e3a',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  boxShadow: '0 6px 18px rgba(0,0,0,0.14)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                <LogOut size={18} color="#c51e3a" />
+                <span>Logout</span>
+              </button>
+            </div>
           </div>
         </div>
       </aside>

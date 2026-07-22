@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const Donors = ({ user }) => {
   const [donors, setDonors] = useState([]);
@@ -120,13 +120,16 @@ const Donors = ({ user }) => {
         return res.json();
       })
       .then(() => {
-        setFeedbackMsg('Donor saved successfully');
+        const msg = editMode ? 'Donor profile updated successfully!' : 'New donor details added successfully!';
+        setFeedbackMsg(msg);
         setModalOpen(false);
         fetchDonors();
+        setTimeout(() => setFeedbackMsg(''), 4000);
       })
       .catch(err => {
         console.error(err);
         setFeedbackMsg(`Error: ${err.message}`);
+        setTimeout(() => setFeedbackMsg(''), 4000);
       });
   };
 
@@ -136,7 +139,11 @@ const Donors = ({ user }) => {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${user.token}` }
       })
-        .then(() => fetchDonors())
+        .then(() => {
+          fetchDonors();
+          setFeedbackMsg('Donor profile removed successfully.');
+          setTimeout(() => setFeedbackMsg(''), 4000);
+        })
         .catch(err => console.error(err));
     }
   };
@@ -148,10 +155,31 @@ const Donors = ({ user }) => {
   const monthlyDonations = donors.filter(d => d.lastDonationDate && new Date(d.lastDonationDate) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative' }}>
+      
+      {/* Floating Success Toast */}
       {feedbackMsg && (
-        <div style={{ padding: '8px 12px', backgroundColor: feedbackMsg.startsWith('Error') ? 'var(--color-danger-light)' : 'var(--color-success-light)', color: feedbackMsg.startsWith('Error') ? 'var(--color-danger)' : 'var(--color-success)', borderRadius: '4px', marginBottom: '12px' }}>
-          {feedbackMsg}
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          zIndex: 9999,
+          backgroundColor: feedbackMsg.startsWith('Error') ? '#EF4444' : '#10B981',
+          color: '#FFFFFF',
+          padding: '14px 22px',
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '0.95rem',
+          fontWeight: 700
+        }}>
+          <CheckCircle size={22} color="#FFFFFF" />
+          <span>{feedbackMsg}</span>
+          <button onClick={() => setFeedbackMsg('')} style={{ background: 'none', border: 'none', color: '#FFFFFF', marginLeft: '12px', cursor: 'pointer' }}>
+            <X size={16} />
+          </button>
         </div>
       )}
       <div className="flex-between">

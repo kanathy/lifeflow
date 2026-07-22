@@ -12,13 +12,23 @@ const Hospitals = ({ user }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
+    hospitalId: '',
     name: '',
     district: 'Colombo',
     type: 'Government',
     contact: '',
     status: 'Active'
   });
+
+  // Toast notification
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const districtsList = [
     'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
@@ -70,6 +80,7 @@ const Hospitals = ({ user }) => {
   const handleOpenAdd = () => {
     setEditMode(false);
     setForm({
+      hospitalId: '',
       name: '',
       district: 'Colombo',
       type: 'Government',
@@ -83,6 +94,7 @@ const Hospitals = ({ user }) => {
     setEditMode(true);
     setSelectedId(item._id);
     setForm({
+      hospitalId: item.hospitalId || '',
       name: item.name,
       district: item.district,
       type: item.type,
@@ -92,35 +104,58 @@ const Hospitals = ({ user }) => {
     setModalOpen(true);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const endpoint = editMode ? `/api/hospitals/${selectedId}` : '/api/hospitals';
     const method = editMode ? 'PUT' : 'POST';
+    setSubmitting(true);
 
-    fetch(endpoint, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${user.token}`
-      },
-      body: JSON.stringify(form)
-    })
-      .then(res => res.json())
-      .then(() => {
+    try {
+      const res = await fetch(endpoint, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`
+        },
+        body: JSON.stringify(form)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data.message || 'Failed to save hospital', 'error');
+      } else {
         setModalOpen(false);
         fetchHospitals();
-      })
-      .catch(err => console.error(err));
+        showToast(editMode ? 'Hospital updated successfully!' : 'Hospital registered successfully!', 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Network error. Please try again.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to remove this hospital?')) {
+  const handleDelete = (id, name) => {
+    if (window.confirm(`Are you sure you want to remove "${name}"?`)) {
       fetch(`/api/hospitals/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${user.token}` }
       })
-        .then(() => fetchHospitals())
-        .catch(err => console.error(err));
+        .then(res => res.json())
+        .then((data) => {
+          if (data.message && data.message.includes('successfully')) {
+            fetchHospitals();
+            showToast('Hospital removed successfully.', 'success');
+          } else {
+            showToast(data.message || 'Failed to remove hospital.', 'error');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          showToast('Network error. Please try again.', 'error');
+        });
     }
   };
 
@@ -132,6 +167,32 @@ const Hospitals = ({ user }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          zIndex: 9999,
+          padding: '14px 20px',
+          borderRadius: '10px',
+          backgroundColor: toast.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
+          color: '#fff',
+          fontWeight: 600,
+          fontSize: '0.875rem',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          animation: 'fadeIn 0.25s ease',
+          maxWidth: '340px'
+        }}>
+          <span>{toast.type === 'success' ? '✓' : '✕'}</span>
+          <span>{toast.message}</span>
+        </div>
+      )}
+
       <div className="flex-between">
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Outfit' }}>Registered Hospitals</h1>
@@ -208,7 +269,11 @@ const Hospitals = ({ user }) => {
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading hospitals database...</div>
         ) : filteredHospitals.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>No hospitals match the criteria.</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            {hospitals.length === 0
+              ? 'No hospitals registered yet. Click "Add New Hospital" to get started.'
+              : 'No hospitals match the search criteria.'}
+          </div>
         ) : (
           <div className="table-container" style={{ margin: 0, border: 'none' }}>
             <table className="custom-table">
@@ -266,7 +331,7 @@ const Hospitals = ({ user }) => {
                           <Edit2 size={12} />
                         </button>
                         <button
-                          onClick={() => handleDelete(item._id)}
+                          onClick={() => handleDelete(item._id, item.name)}
                           style={{
                             padding: '6px',
                             border: '1px solid var(--border-color)',
@@ -314,6 +379,18 @@ const Hospitals = ({ user }) => {
             </h2>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label>Hospital ID</label>
+                <input
+                  type="text"
+                  value={form.hospitalId}
+                  onChange={(e) => setForm({ ...form, hospitalId: e.target.value })}
+                  className="form-control"
+                  placeholder="e.g. HSP001"
+                  required
+                />
+              </div>
+
               <div className="form-group">
                 <label>Hospital Name</label>
                 <input
@@ -378,11 +455,14 @@ const Hospitals = ({ user }) => {
               </div>
 
               <div className="flex-between" style={{ marginTop: '16px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>
+                <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)} disabled={submitting}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editMode ? 'Save Changes' : 'Register Center'}
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting
+                    ? (editMode ? 'Saving...' : 'Registering...')
+                    : (editMode ? 'Save Changes' : 'Register Center')
+                  }
                 </button>
               </div>
             </form>

@@ -6,6 +6,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 // Page components
 import Login from './pages/Login';
+import CreateAccount from './pages/CreateAccount';
 import Dashboard from './pages/Dashboard';
 import BloodInventory from './pages/BloodInventory';
 import Donors from './pages/Donors';
@@ -55,6 +56,12 @@ const App = () => {
         <Route
           path="/login"
           element={<Login login={login} user={user} />}
+        />
+
+        {/* Public Create Account Route */}
+        <Route
+          path="/create-account"
+          element={<CreateAccount />}
         />
 
         {/* Private Shell Routes */}
