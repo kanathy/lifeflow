@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Bell, Mail, Monitor, Save, CloudLightning, ShieldAlert, Check, User, LogOut, Key } from 'lucide-react';
+import LogoutModal from '../components/LogoutModal';
 
 const Settings = ({ user, logout }) => {
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState('General');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,9 +65,12 @@ const Settings = ({ user, logout }) => {
   };
 
   const handleLogoutClick = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      if (logout) logout();
-    }
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    if (logout) logout();
   };
 
   return (
@@ -256,12 +261,24 @@ const Settings = ({ user, logout }) => {
                   style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'var(--color-primary-light)' }}
                 />
                 <div>
-                  <h4 style={{ fontSize: '1.1rem', fontWeight: 800 }}>{user?.name || 'User Profile'}</h4>
+                  <h4 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+                    {user?.role === 'Hospital' ? (user?.hospitalName || user?.name) : (user?.name || 'User Profile')}
+                  </h4>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Email: {user?.email || 'N/A'}</p>
-                  <div style={{ marginTop: '6px' }}>
+                  {user?.role === 'Hospital' && user?.hospitalDistrict && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      📍 {user.hospitalDistrict} District · {user.hospitalType || 'Hospital'}
+                    </p>
+                  )}
+                  <div style={{ marginTop: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>
-                      Role: {user?.role || 'Staff'}
+                      Role: {user?.role === 'Hospital' ? 'Hospital Account' : (user?.role || 'Staff')}
                     </span>
+                    {user?.hospitalId && (
+                      <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
+                        ID: {user.hospitalId}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -304,6 +321,13 @@ const Settings = ({ user, logout }) => {
           )}
         </div>
       </div>
+
+      <LogoutModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+        user={user}
+      />
     </div>
   );
 };

@@ -7,9 +7,12 @@ const dbResolver = require('../utils/dbResolver');
 const getUsers = async (req, res) => {
   try {
     const list = await dbResolver.find('User');
-    // Remove passwords from response
+    // Remove passwords from response and normalize legacy 'Hospital Staff' to 'Hospital'
     const sanitized = list.map(u => {
       const { password, ...rest } = u;
+      if (rest.role === 'Hospital Staff') {
+        rest.role = 'Hospital';
+      }
       return rest;
     });
     res.json(sanitized);

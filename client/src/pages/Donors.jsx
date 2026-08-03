@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle, CheckCircle } from 'lucide-react';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const Donors = ({ user }) => {
   const [donors, setDonors] = useState([]);
   const [filteredDonors, setFilteredDonors] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
+
+  // Delete modal states
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Modal form states
   const [modalOpen, setModalOpen] = useState(false);
@@ -133,19 +140,33 @@ const Donors = ({ user }) => {
       });
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to remove this donor profile?')) {
-      fetch(`/api/donors/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+  const handleDelete = (item) => {
+    setItemToDelete(item);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+
+    const donorName = itemToDelete.name;
+
+    setDeleting(true);
+    fetch(`/api/donors/${itemToDelete._id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${user.token}` }
+    })
+      .then(() => {
+        setDeleting(false);
+        setDeleteModalOpen(false);
+        setItemToDelete(null);
+        fetchDonors();
+        setFeedbackMsg(`Donor profile "${donorName}" removed successfully!`);
+        setTimeout(() => setFeedbackMsg(''), 4000);
       })
-        .then(() => {
-          fetchDonors();
-          setFeedbackMsg('Donor profile removed successfully.');
-          setTimeout(() => setFeedbackMsg(''), 4000);
-        })
-        .catch(err => console.error(err));
-    }
+      .catch(err => {
+        console.error(err);
+        setDeleting(false);
+      });
   };
 
   // Metrics calculations
@@ -321,7 +342,7 @@ const Donors = ({ user }) => {
                           <Edit2 size={12} />
                         </button>
                         <button
-                          onClick={() => handleDelete(item._id)}
+                          onClick={() => handleDelete(item)}
                           style={{
                             padding: '6px',
                             border: '1px solid var(--border-color)',
@@ -466,6 +487,21 @@ const Donors = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* Custom Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Remove Donor Profile?"
+        description="Are you sure you want to remove this volunteer donor profile? This action is permanent and cannot be undone."
+        itemDetails={{
+          name: itemToDelete?.name,
+          info: `${itemToDelete?.bloodGroup || ''} Donor · ${itemToDelete?.district || ''} District`,
+          badge: itemToDelete?.bloodGroup || 'Donor'
+        }}
+        loading={deleting}
+      />
     </div>
   );
 };

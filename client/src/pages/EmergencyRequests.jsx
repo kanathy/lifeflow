@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, AlertCircle, CheckCircle, Clock, Edit2, Trash2, X, Check, ArrowRight } from 'lucide-react';
+import { Plus, Search, AlertCircle, CheckCircle, Clock, Edit2, Trash2, X, Check, ArrowRight, CheckCircle2 } from 'lucide-react';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const EmergencyRequests = ({ user }) => {
   const [requests, setRequests] = useState([]);
@@ -12,6 +13,12 @@ const EmergencyRequests = ({ user }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+
+  // Toast & Delete modal states
+  const [successMessage, setSuccessMessage] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
     patientName: '',
     bloodGroup: 'A+',
@@ -110,7 +117,9 @@ const EmergencyRequests = ({ user }) => {
       .then(res => res.json())
       .then(() => {
         setModalOpen(false);
+        setSuccessMessage(editMode ? 'Emergency request updated successfully!' : 'New urgent dispatch request created successfully!');
         fetchRequests();
+        setTimeout(() => setSuccessMessage(''), 4000);
       })
       .catch(err => console.error(err));
   };
@@ -128,15 +137,33 @@ const EmergencyRequests = ({ user }) => {
       .catch(err => console.error(err));
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this emergency request?')) {
-      fetch(`/api/requests/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+  const handleDelete = (item) => {
+    setItemToDelete(item);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+
+    const patientName = itemToDelete.patientName;
+
+    setDeleting(true);
+    fetch(`/api/requests/${itemToDelete._id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${user.token}` }
+    })
+      .then(() => {
+        setDeleting(false);
+        setDeleteModalOpen(false);
+        setItemToDelete(null);
+        setSuccessMessage(`Emergency request for "${patientName}" has been deleted successfully!`);
+        fetchRequests();
+        setTimeout(() => setSuccessMessage(''), 4000);
       })
-        .then(() => fetchRequests())
-        .catch(err => console.error(err));
-    }
+      .catch(err => {
+        console.error(err);
+        setDeleting(false);
+      });
   };
 
   // Metrics
@@ -157,6 +184,57 @@ const EmergencyRequests = ({ user }) => {
           <span>New Urgent Request</span>
         </button>
       </div>
+
+      {/* Success Notification Toast Banner */}
+      {successMessage && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          backgroundColor: '#F0FDF4',
+          border: '1px solid #86EFAC',
+          color: '#166534',
+          padding: '14px 18px',
+          borderRadius: '14px',
+          fontSize: '0.88rem',
+          fontWeight: 600,
+          boxShadow: '0 4px 14px rgba(22, 101, 52, 0.1)',
+          animation: 'fadeIn var(--transition-fast)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              backgroundColor: '#DCFCE7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#15803D'
+            }}>
+              <CheckCircle2 size={18} />
+            </div>
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage('')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#166534',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px'
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
 
       {/* Stats Board cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
@@ -302,7 +380,7 @@ const EmergencyRequests = ({ user }) => {
                         </button>
 
                         <button
-                          onClick={() => handleDelete(item._id)}
+                          onClick={() => handleDelete(item)}
                           style={{
                             padding: '6px',
                             border: '1px solid var(--border-color)',
@@ -425,6 +503,21 @@ const EmergencyRequests = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* Custom Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Emergency Request?"
+        description="Are you sure you want to delete this emergency request? This action is permanent and cannot be undone."
+        itemDetails={{
+          name: itemToDelete?.patientName,
+          info: `${itemToDelete?.bloodGroup || ''} · ${itemToDelete?.hospital || ''} · ${itemToDelete?.district || ''}`,
+          badge: itemToDelete?.status || 'Pending'
+        }}
+        loading={deleting}
+      />
     </div>
   );
 };

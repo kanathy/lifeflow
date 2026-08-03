@@ -78,7 +78,7 @@ const SriLankaMap = ({ availability, onDistrictSelect }) => {
       const dist = districts.find(d => d.id === districtId);
       return dist ? dist.fallbackColor : '#cbd5e1';
     }
-    
+
     if (data.status === 'Good') return '#10b981'; // Green
     if (data.status === 'Low') return '#f59e0b'; // Orange/Yellow
     return '#ef4444'; // Red
@@ -126,7 +126,7 @@ const SriLankaMap = ({ availability, onDistrictSelect }) => {
                   filter: isHovered ? 'brightness(1.05)' : 'none'
                 }}
               />
-              
+
               {/* Dot indicator */}
               <circle
                 cx={district.labelX}

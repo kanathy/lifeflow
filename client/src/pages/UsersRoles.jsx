@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Shield, UserCheck, ShieldAlert, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Search, Shield, UserCheck, ShieldAlert, Edit2, Trash2, X, CheckCircle2 } from 'lucide-react';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const UsersRoles = ({ user }) => {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Notification toast state
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Delete modal states
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Modal forms
   const [modalOpen, setModalOpen] = useState(false);
@@ -112,25 +121,45 @@ const UsersRoles = ({ user }) => {
       .then(res => res.json())
       .then(() => {
         setModalOpen(false);
+        setSuccessMessage(editMode ? 'User profile updated successfully!' : 'New user account created successfully!');
         fetchUsers();
+        setTimeout(() => setSuccessMessage(''), 4000);
       })
       .catch(err => console.error(err));
   };
 
-  const handleDelete = (id) => {
-    if (id === user._id) {
+  const handleDelete = (item) => {
+    if (item._id === user._id) {
       alert('You cannot delete your own active administrator profile!');
       return;
     }
     
-    if (window.confirm('Are you sure you want to delete this user profile?')) {
-      fetch(`/api/users/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+    setUserToDelete(item);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!userToDelete) return;
+
+    const deletedName = userToDelete.name;
+
+    setDeleting(true);
+    fetch(`/api/users/${userToDelete._id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${user.token}` }
+    })
+      .then(() => {
+        setDeleting(false);
+        setDeleteModalOpen(false);
+        setUserToDelete(null);
+        setSuccessMessage(`User profile "${deletedName}" has been deleted successfully!`);
+        fetchUsers();
+        setTimeout(() => setSuccessMessage(''), 4000);
       })
-        .then(() => fetchUsers())
-        .catch(err => console.error(err));
-    }
+      .catch(err => {
+        console.error(err);
+        setDeleting(false);
+      });
   };
 
   // Block Access for Non-Admins
@@ -168,6 +197,57 @@ const UsersRoles = ({ user }) => {
           <span>Add New User</span>
         </button>
       </div>
+
+      {/* Success Notification Toast Banner */}
+      {successMessage && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          backgroundColor: '#F0FDF4',
+          border: '1px solid #86EFAC',
+          color: '#166534',
+          padding: '14px 18px',
+          borderRadius: '14px',
+          fontSize: '0.88rem',
+          fontWeight: 600,
+          boxShadow: '0 4px 14px rgba(22, 101, 52, 0.1)',
+          animation: 'fadeIn var(--transition-fast)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              backgroundColor: '#DCFCE7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#15803D'
+            }}>
+              <CheckCircle2 size={18} />
+            </div>
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage('')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#166534',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px'
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
 
       {/* Search Filter panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -220,8 +300,12 @@ const UsersRoles = ({ user }) => {
                       </div>
                     </td>
                     <td>
-                      <span className={`badge badge-${item.role === 'Administrator' ? 'danger' : item.role === 'Donor Coordinator' ? 'warning' : item.role === 'Hospital Staff' ? 'info' : 'success'}`}>
-                        {item.role}
+                      <span className={`badge badge-${
+                        item.role === 'Administrator' ? 'danger' :
+                        (item.role === 'Hospital' || item.role === 'Hospital Staff') ? 'info' :
+                        item.role === 'Donor Coordinator' ? 'warning' : 'success'
+                      }`}>
+                        {item.role === 'Hospital Staff' ? 'Hospital' : item.role}
                       </span>
                     </td>
                     <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>{item.email}</td>
@@ -244,7 +328,7 @@ const UsersRoles = ({ user }) => {
                           <Edit2 size={12} />
                         </button>
                         <button
-                          onClick={() => handleDelete(item._id)}
+                          onClick={() => handleDelete(item)}
                           style={{
                             padding: '6px',
                             border: '1px solid var(--border-color)',
@@ -333,12 +417,12 @@ const UsersRoles = ({ user }) => {
                 <div className="form-group">
                   <label>Access Role Scope</label>
                   <select
-                    value={form.role}
+                    value={form.role === 'Hospital Staff' ? 'Hospital' : form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
                     className="form-control"
                   >
                     <option value="Administrator">Administrator</option>
-                    <option value="Hospital Staff">Hospital Staff</option>
+                    <option value="Hospital">Hospital</option>
                     <option value="Donor Coordinator">Donor Coordinator</option>
                     <option value="Viewer">Viewer</option>
                   </select>
@@ -369,6 +453,15 @@ const UsersRoles = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* Custom Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        targetUser={userToDelete}
+        loading={deleting}
+      />
     </div>
   );
 };

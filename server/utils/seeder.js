@@ -21,7 +21,7 @@ const DiseaseCase = require('../models/DiseaseCase');
 const seedData = {
   users: [
     { userId: 'USR001', name: 'Admin User', role: 'Administrator', email: 'admin@lifeflow.lk', password: 'admin123', status: 'Active' },
-    { userId: 'USR002', name: 'Hospital User', role: 'Hospital Staff', email: 'staff@kandy.lk', password: 'staff123', status: 'Active' },
+    { userId: 'USR002', name: 'Kandy General Hospital', role: 'Hospital', email: 'staff@kandy.lk', password: 'staff123', status: 'Active' },
     { userId: 'USR003', name: 'Blood Bank Staff', role: 'Donor Coordinator', email: 'bank@colombo.lk', password: 'bank123', status: 'Active' },
     { userId: 'USR004', name: 'Donor Coordinator', role: 'Donor Coordinator', email: 'donor@galle.lk', password: 'donor123', status: 'Active' },
     { userId: 'USR005', name: 'Viewer User', role: 'Viewer', email: 'viewer@lifeflow.lk', password: 'viewer123', status: 'Inactive' }

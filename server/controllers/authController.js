@@ -72,12 +72,22 @@ const authUser = async (req, res) => {
       }
 
       if (isMatch) {
+        // If this is a Hospital user, fetch hospital details
+        let hospitalInfo = null;
+        if (user.role === 'Hospital' && user.hospitalId) {
+          hospitalInfo = await dbResolver.findOne('Hospital', { hospitalId: user.hospitalId });
+        }
+
         return res.json({
           _id: user._id,
           name: user.name,
           email: user.email,
           role: user.role,
           status: user.status,
+          hospitalId: user.hospitalId || null,
+          hospitalName: hospitalInfo ? hospitalInfo.name : (user.role === 'Hospital' ? user.name : null),
+          hospitalDistrict: hospitalInfo ? hospitalInfo.district : null,
+          hospitalType: hospitalInfo ? hospitalInfo.type : null,
           token: generateToken(user._id)
         });
       }
@@ -153,8 +163,9 @@ const registerHospitalAccount = async (req, res) => {
       name: hospitalName,
       email,
       password: hashedPassword,
-      role: 'Hospital Staff',
-      status: 'Active'
+      role: 'Hospital',
+      status: 'Active',
+      hospitalId: hospital.hospitalId
     };
     const user = await dbResolver.create('User', userPayload);
 
@@ -166,6 +177,10 @@ const registerHospitalAccount = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        hospitalId: hospital.hospitalId,
+        hospitalName: hospital.name,
+        hospitalDistrict: hospital.district,
+        hospitalType: hospital.type,
         token: generateToken(user._id)
       }
     });

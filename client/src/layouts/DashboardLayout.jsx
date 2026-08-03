@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import LogoutModal from '../components/LogoutModal';
 import {
   LayoutDashboard,
   Droplet,
@@ -32,6 +33,7 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [reportsExpanded, setReportsExpanded] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -99,9 +101,12 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
   };
 
   const handleLogoutClick = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      logout();
-    }
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    logout();
   };
 
   // Filter menu items by user role (adminOnly check)
@@ -223,7 +228,13 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
                 {item.hasSubmenu && reportsExpanded && (
                   <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '32px', gap: '2px', marginTop: '2px', marginBottom: '4px' }}>
                     {item.subItems.map((sub, sIdx) => {
-                      const isSubActive = sIdx === 0; // Default active on Incident Reports
+                      // Extract tab param from sub.path (e.g. "/reports?tab=accident" → "accident")
+                      const subTabParam = sub.path.includes('?tab=') ? sub.path.split('?tab=')[1] : null;
+                      const currentTab = new URLSearchParams(location.search).get('tab');
+                      // Active if: URL tab matches, OR if no tab in URL and this is the first item
+                      const isSubActive = subTabParam
+                        ? currentTab === subTabParam
+                        : (!currentTab && sIdx === 0);
                       return (
                         <button
                           key={sIdx}
@@ -242,7 +253,8 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
                             fontWeight: isSubActive ? 700 : 500,
                             color: isSubActive ? '#e11d48' : 'var(--text-secondary)',
                             backgroundColor: isSubActive ? 'rgba(225, 29, 72, 0.08)' : 'transparent',
-                            textAlign: 'left'
+                            textAlign: 'left',
+                            transition: 'all 0.15s ease'
                           }}
                         >
                           <span style={{ fontSize: '1rem', lineHeight: '0.5' }}>•</span>
@@ -259,48 +271,107 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
           {/* Logout button removed from nav; moved into banner below */}
         </nav>
 
-        {/* Heartbeat indicator Banner */}
+        {/* Sidebar bottom banner: Hospital info or blood donation */}
         <div style={{ padding: '16px' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #c51e3a, #e11d48)',
-            padding: '18px',
-            borderRadius: 'var(--radius-md)',
-            color: '#ffffff',
-            position: 'relative',
-            overflow: 'hidden',
-            boxShadow: 'var(--shadow-md)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center'
-          }}>
-            <Droplet size={32} color="#ffffff" fill="#ffffff" style={{ animation: 'pulse 2s infinite', marginBottom: '8px' }} />
-            <h4 style={{ fontSize: '0.8rem', fontWeight: 700, margin: '2px 0 6px 0' }}>Every Drop Counts</h4>
-            <p style={{ fontSize: '0.65rem', opacity: 0.9 }}>Donate Blood, Save Lives</p>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', width: '100%' }}>
+          {user?.role === 'Hospital' ? (
+            <div style={{
+              background: 'linear-gradient(135deg, #1e3a5f, #1a4080)',
+              padding: '16px',
+              borderRadius: 'var(--radius-md)',
+              color: '#ffffff',
+              boxShadow: 'var(--shadow-md)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <div style={{
+                  width: '30px', height: '30px', borderRadius: '8px',
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <Building2 size={16} color="#fff" />
+                </div>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Hospital</span>
+              </div>
+              <h4 style={{ fontSize: '0.82rem', fontWeight: 800, margin: 0, lineHeight: 1.3 }}>
+                {user?.hospitalName || user?.name}
+              </h4>
+              {user?.hospitalDistrict && (
+                <p style={{ fontSize: '0.68rem', opacity: 0.8, margin: 0 }}>
+                  📍 {user.hospitalDistrict} District
+                </p>
+              )}
+              {user?.hospitalType && (
+                <p style={{ fontSize: '0.65rem', opacity: 0.7, margin: 0 }}>
+                  {user.hospitalType} Hospital
+                </p>
+              )}
               <button
                 onClick={handleLogoutClick}
                 style={{
-                  flex: 1,
-                  backgroundColor: '#ffffff',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  color: '#c51e3a',
-                  padding: '12px 16px',
-                  borderRadius: '10px',
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  boxShadow: '0 6px 18px rgba(0,0,0,0.14)',
+                  marginTop: '10px',
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  color: '#fff',
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '10px'
+                  gap: '8px',
+                  width: '100%'
                 }}
               >
-                <LogOut size={18} color="#c51e3a" />
+                <LogOut size={14} color="#fff" />
                 <span>Logout</span>
               </button>
             </div>
-          </div>
+          ) : (
+            <div style={{
+              background: 'linear-gradient(135deg, #c51e3a, #e11d48)',
+              padding: '18px',
+              borderRadius: 'var(--radius-md)',
+              color: '#ffffff',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: 'var(--shadow-md)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center'
+            }}>
+              <Droplet size={32} color="#ffffff" fill="#ffffff" style={{ animation: 'pulse 2s infinite', marginBottom: '8px' }} />
+              <h4 style={{ fontSize: '0.8rem', fontWeight: 700, margin: '2px 0 6px 0' }}>Every Drop Counts</h4>
+              <p style={{ fontSize: '0.65rem', opacity: 0.9 }}>Donate Blood, Save Lives</p>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', width: '100%' }}>
+                <button
+                  onClick={handleLogoutClick}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    color: '#c51e3a',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    fontWeight: 800,
+                    fontSize: '1rem',
+                    boxShadow: '0 6px 18px rgba(0,0,0,0.14)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px'
+                  }}
+                >
+                  <LogOut size={18} color="#c51e3a" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -346,7 +417,9 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
                 {location.pathname.substring(1).replace('-', ' ') || 'Dashboard'}
               </h2>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                Welcome back, <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{user?.name || 'User'}!</span>
+                Welcome back, <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>
+                  {user?.role === 'Hospital' ? (user?.hospitalName || user?.name) : (user?.name || 'User')}!
+                </span>
               </p>
             </div>
           </div>
@@ -498,8 +571,15 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
                 style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: 'var(--color-primary-light)' }}
               />
               <div className="profile-details">
-                <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>{user?.name || 'Staff User'}</p>
-                <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{user?.role || 'Viewer'}</p>
+                <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {user?.role === 'Hospital' ? (user?.hospitalName || user?.name) : (user?.name || 'Staff User')}
+                </p>
+                <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                  {user?.role === 'Hospital'
+                    ? `🏥 Hospital${user?.hospitalDistrict ? ' · ' + user.hospitalDistrict : ''}`
+                    : (user?.role || 'Viewer')
+                  }
+                </p>
               </div>
             </div>
           </div>
@@ -579,6 +659,14 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
           }
         }
       `}</style>
+
+      {/* Custom UI Logout Confirmation Modal */}
+      <LogoutModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+        user={user}
+      />
     </div>
   );
 };

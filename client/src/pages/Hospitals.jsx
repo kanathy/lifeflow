@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Building2, Phone, MapPin, Edit2, Trash2, X } from 'lucide-react';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const Hospitals = ({ user }) => {
   const [hospitals, setHospitals] = useState([]);
@@ -13,6 +14,11 @@ const Hospitals = ({ user }) => {
   const [editMode, setEditMode] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Delete modal states
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
     hospitalId: '',
     name: '',
@@ -137,26 +143,36 @@ const Hospitals = ({ user }) => {
     }
   };
 
-  const handleDelete = (id, name) => {
-    if (window.confirm(`Are you sure you want to remove "${name}"?`)) {
-      fetch(`/api/hospitals/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+  const handleDelete = (item) => {
+    setItemToDelete(item);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+
+    setDeleting(true);
+    fetch(`/api/hospitals/${itemToDelete._id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${user.token}` }
+    })
+      .then(res => res.json())
+      .then((data) => {
+        setDeleting(false);
+        setDeleteModalOpen(false);
+        if (data.message && data.message.includes('successfully')) {
+          fetchHospitals();
+          showToast(`Hospital "${itemToDelete.name}" removed successfully!`, 'success');
+        } else {
+          showToast(data.message || 'Failed to remove hospital.', 'error');
+        }
+        setItemToDelete(null);
       })
-        .then(res => res.json())
-        .then((data) => {
-          if (data.message && data.message.includes('successfully')) {
-            fetchHospitals();
-            showToast('Hospital removed successfully.', 'success');
-          } else {
-            showToast(data.message || 'Failed to remove hospital.', 'error');
-          }
-        })
-        .catch(err => {
-          console.error(err);
-          showToast('Network error. Please try again.', 'error');
-        });
-    }
+      .catch(err => {
+        console.error(err);
+        setDeleting(false);
+        showToast('Network error. Please try again.', 'error');
+      });
   };
 
   // Metrics
@@ -331,7 +347,7 @@ const Hospitals = ({ user }) => {
                           <Edit2 size={12} />
                         </button>
                         <button
-                          onClick={() => handleDelete(item._id, item.name)}
+                          onClick={() => handleDelete(item)}
                           style={{
                             padding: '6px',
                             border: '1px solid var(--border-color)',
@@ -469,6 +485,21 @@ const Hospitals = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* Custom Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Remove Hospital?"
+        description="Are you sure you want to remove this hospital from the system? This action is permanent and cannot be undone."
+        itemDetails={{
+          name: itemToDelete?.name,
+          info: `${itemToDelete?.district || ''} District · ${itemToDelete?.type || 'Government'} Hospital`,
+          badge: itemToDelete?.type || 'Hospital'
+        }}
+        loading={deleting}
+      />
     </div>
   );
 };

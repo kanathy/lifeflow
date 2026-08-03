@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit2, Trash2, X, SlidersHorizontal } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 const BloodInventory = ({ user }) => {
   const [inventory, setInventory] = useState([]);
@@ -11,6 +12,12 @@ const BloodInventory = ({ user }) => {
   const [filterDistrict, setFilterDistrict] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
   const [filterRh, setFilterRh] = useState('');
+
+  // Toast & Delete modal states
+  const [successMessage, setSuccessMessage] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -120,20 +127,41 @@ const BloodInventory = ({ user }) => {
       .then(res => res.json())
       .then(() => {
         setModalOpen(false);
+        setSuccessMessage(editMode ? 'Stock entry updated successfully!' : 'New stock entry created successfully!');
         fetchInventory();
+        setTimeout(() => setSuccessMessage(''), 4000);
       })
       .catch(err => console.error(err));
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this stock entry?')) {
-      fetch(`/api/inventory/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+  const handleDelete = (item) => {
+    setItemToDelete(item);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+
+    const group = itemToDelete.bloodGroup;
+    const district = itemToDelete.district;
+
+    setDeleting(true);
+    fetch(`/api/inventory/${itemToDelete._id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${user.token}` }
+    })
+      .then(() => {
+        setDeleting(false);
+        setDeleteModalOpen(false);
+        setItemToDelete(null);
+        setSuccessMessage(`Blood stock entry "${group}" for ${district} district deleted successfully!`);
+        fetchInventory();
+        setTimeout(() => setSuccessMessage(''), 4000);
       })
-        .then(() => fetchInventory())
-        .catch(err => console.error(err));
-    }
+      .catch(err => {
+        console.error(err);
+        setDeleting(false);
+      });
   };
 
   const totalUnits = filteredInventory.reduce((acc, curr) => acc + curr.availableUnits, 0);
@@ -150,6 +178,57 @@ const BloodInventory = ({ user }) => {
           <span>Add New Stock</span>
         </button>
       </div>
+
+      {/* Success Notification Toast Banner */}
+      {successMessage && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          backgroundColor: '#F0FDF4',
+          border: '1px solid #86EFAC',
+          color: '#166534',
+          padding: '14px 18px',
+          borderRadius: '14px',
+          fontSize: '0.88rem',
+          fontWeight: 600,
+          boxShadow: '0 4px 14px rgba(22, 101, 52, 0.1)',
+          animation: 'fadeIn var(--transition-fast)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              backgroundColor: '#DCFCE7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#15803D'
+            }}>
+              <CheckCircle2 size={18} />
+            </div>
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage('')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#166534',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px'
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
 
       {/* Search and Filters panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -275,7 +354,7 @@ const BloodInventory = ({ user }) => {
                           <Edit2 size={12} />
                         </button>
                         <button
-                          onClick={() => handleDelete(item._id)}
+                          onClick={() => handleDelete(item)}
                           style={{
                             padding: '6px',
                             border: '1px solid var(--border-color)',
@@ -403,6 +482,22 @@ const BloodInventory = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* Custom Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Blood Stock Entry?"
+        description="Are you sure you want to delete this stock entry? This action is permanent and cannot be undone."
+        itemDetails={{
+          name: `${itemToDelete?.bloodGroup} Blood Stock`,
+          info: `${itemToDelete?.district} District · ${itemToDelete?.availableUnits} Units Available`,
+          badge: itemToDelete?.bloodGroup,
+          isBlood: true
+        }}
+        loading={deleting}
+      />
     </div>
   );
 };

@@ -22,13 +22,17 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['Administrator', 'Hospital Staff', 'Donor Coordinator', 'Viewer'],
+    enum: ['Administrator', 'Hospital', 'Hospital Staff', 'Donor Coordinator', 'Viewer'],
     default: 'Viewer'
   },
   status: {
     type: String,
     enum: ['Active', 'Inactive'],
     default: 'Active'
+  },
+  hospitalId: {
+    type: String,
+    default: null
   }
 }, { timestamps: true });
 
