@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { exportToCSV } from '../utils/exportUtil';
+import PdfPreviewModal from '../components/PdfPreviewModal';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 import { 
   Search, 
   Plus, 
@@ -216,6 +219,11 @@ const Reports = ({ user }) => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
+
+  // PDF Export Preview Modal State
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfExportData, setPdfExportData] = useState([]);
+  const [pdfExportTitle, setPdfExportTitle] = useState('DAILY REPORT SUMMARY');
 
   const showSuccessToast = (msg) => {
     setToastMsg(msg);
@@ -592,82 +600,28 @@ const Reports = ({ user }) => {
 
   // Single Record Export
   const handleSingleExport = (item, format) => {
-    let content = '';
-    const title = `${activeConfig.title} Record`;
-    
     if (format === 'excel') {
-      content += '\uFEFF';
-      content += `Record ID,Date,Location/District,Type/Group,Severity/Status,Value/Units,Hospital/Contact\n`;
-      content += `"${item.caseId || item.donorId || item.hospitalId || ''}","${item.date || ''}","${item.location || item.district || ''}","${item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || ''}","${item.severity || item.status || ''}","${item.injured || item.availableUnits || 1}","${item.patientName || item.name || item.hospital || ''}"\n`;
+      exportToCSV([item], `${item.caseId || item.donorId || 'Record'}_Record.csv`, `${activeConfig.title} Record`, activeTab);
     } else {
-      content += `==============================================\n`;
-      content += `           LIFEFLOW - ${title.toUpperCase()}        \n`;
-      content += `==============================================\n`;
-      content += `ID/CODE        : ${item.caseId || item.donorId || item.hospitalId}\n`;
-      content += `DATE           : ${item.date || 'N/A'}\n`;
-      content += `LOCATION       : ${item.location || item.district || 'N/A'}\n`;
-      content += `TYPE/CATEGORY  : ${item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || 'N/A'}\n`;
-      content += `SEVERITY/STATUS: ${item.severity || item.status || 'N/A'}\n`;
-      content += `COUNT/UNITS    : ${item.injured || item.availableUnits || 1}\n`;
-      content += `ENTITY NAME    : ${item.patientName || item.name || item.hospital || 'N/A'}\n`;
-      content += `==============================================\n`;
+      setPdfExportData([item]);
+      setPdfExportTitle(`${item.caseId || item.donorId || item.hospitalId || 'SINGLE'} RECORD SUMMARY`);
+      setPdfModalOpen(true);
     }
-
-    const mime = format === 'excel' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;';
-    const blob = new Blob([content], { type: mime });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${item.caseId || 'Report'}_${format === 'excel' ? 'Record.csv' : 'Record.txt'}`;
-    a.click();
-    window.URL.revokeObjectURL(url);
   };
 
   // Bulk Excel Export
   const handleExportAllExcel = () => {
-    let content = '\uFEFF';
-    content += `=========================================================================\n`;
-    content += `LIFEFLOW MASTER REPORT - ${activeConfig.title.toUpperCase()}\n`;
-    content += `GENERATED ON: ${new Date().toLocaleString()}\n`;
-    content += `=========================================================================\n\n`;
-
-    content += `# ,ID/Code,Date,Location/District,Type/Group,Severity/Status,Units/Count,Patient/Contact,Hospital\n`;
-
-    filteredList.forEach((item, idx) => {
-      content += `"${idx + 1}","${item.caseId || item.donorId || ''}","${item.date || ''}","${item.location || item.district || ''}","${item.accidentType || item.diseaseType || item.bloodGroup || ''}","${item.severity || item.status || ''}","${item.injured || item.availableUnits || 1}","${item.patientName || item.name || ''}","${item.hospital || ''}"\n`;
-    });
-
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `LifeFlow_${activeTab.toUpperCase()}_Master_Report_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    const fileName = `LifeFlow_${activeTab.toUpperCase()}_Master_Report_${new Date().toISOString().slice(0,10)}.csv`;
+    exportToCSV(filteredList, fileName, activeConfig.title, activeTab);
   };
 
-  // Bulk PDF / Text Export
+  // Bulk PDF / Preview Export matching reference screenshot
   const handleExportAllPDF = () => {
-    let content = `=========================================================================\n`;
-    content += `LIFEFLOW BLOOD BANK - ${activeConfig.title.toUpperCase()}\n`;
-    content += `EXPORTED ON: ${new Date().toLocaleString()}\n`;
-    content += `=========================================================================\n\n`;
-
-    filteredList.forEach((item, idx) => {
-      content += `[#${idx + 1}] ${item.caseId || item.donorId || 'ID'} | Date: ${item.date || 'N/A'} | Loc: ${item.location || item.district || 'N/A'}\n`;
-      content += `     Type: ${item.accidentType || item.diseaseType || item.bloodGroup || 'N/A'} | Status/Severity: ${item.severity || item.status}\n`;
-      content += `     Entity: ${item.patientName || item.name || 'N/A'} | Units/Count: ${item.injured || item.availableUnits || 1}\n`;
-      content += `-`.repeat(75) + `\n`;
-    });
-
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `LifeFlow_${activeTab.toUpperCase()}_Summary_${new Date().toISOString().slice(0,10)}.pdf.txt`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    setPdfExportData(filteredList);
+    setPdfExportTitle(`DAILY ${activeConfig.title.toUpperCase()} SUMMARY`);
+    setPdfModalOpen(true);
   };
+
 
   // Submit Handler for Modal
   const handleAddSubmit = (e) => {
@@ -1105,23 +1059,23 @@ const Reports = ({ user }) => {
         {/* Toolbar Controls */}
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
           
-          {/* Search Field */}
-          <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
-            <Search size={16} color="var(--text-light)" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input
-              type="text"
-              placeholder="Search by case ID, location, person..."
+          {/* Search Field with Suggestions */}
+          <div style={{ flex: 1, minWidth: '240px' }}>
+            <SearchWithSuggestions
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px 10px 38px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem'
-              }}
+              onChange={setSearchTerm}
+              placeholder="Search by case ID, location, person..."
+              suggestions={Array.from(new Set(
+                currentList.flatMap(item => [
+                  item.caseId || item.donorId || item.hospitalId,
+                  item.location || item.district,
+                  item.patientName || item.name,
+                  item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType
+                ]).filter(Boolean)
+              )).map(val => ({
+                label: String(val),
+                category: activeConfig.title ? activeConfig.title.replace(' Reports', '') : 'Record'
+              }))}
             />
           </div>
 
@@ -1636,7 +1590,22 @@ const Reports = ({ user }) => {
         </div>
       )}
 
+      {/* PDF Export Preview Modal matching screenshot */}
+      <PdfPreviewModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        data={pdfExportData}
+        title={pdfExportTitle}
+        activeTab={activeTab}
+        filters={{
+          fromDate: '2026-07-01',
+          toDate: '2026-08-10',
+          category: severityFilter !== 'All Severity' ? severityFilter : 'All'
+        }}
+      />
+
     </div>
+
   );
 };
 

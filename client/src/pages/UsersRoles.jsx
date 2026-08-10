@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Shield, UserCheck, ShieldAlert, Edit2, Trash2, X, CheckCircle2 } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
 const UsersRoles = ({ user }) => {
   const [users, setUsers] = useState([]);
@@ -252,15 +253,14 @@ const UsersRoles = ({ user }) => {
       {/* Search Filter panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
-            <Search size={16} color="var(--text-light)" style={{ position: 'absolute', left: '12px' }} />
-            <input
-              type="text"
-              placeholder="Search by Name, Email, or Role Title..."
+          <div style={{ flex: 1 }}>
+            <SearchWithSuggestions
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-control"
-              style={{ paddingLeft: '36px', width: '100%' }}
+              onChange={setSearchTerm}
+              placeholder="Search by Name, Email, or Role Title..."
+              suggestions={Array.from(new Set(
+                users.flatMap(u => [u.name, u.email, u.role]).filter(Boolean)
+              )).map(val => ({ label: String(val), category: 'User Role' }))}
             />
           </div>
         </div>

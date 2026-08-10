@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LogoutModal from '../components/LogoutModal';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 import {
   LayoutDashboard,
   Droplet,
@@ -34,6 +35,23 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [reportsExpanded, setReportsExpanded] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Global header search state & suggestions
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+  const globalSearchSuggestions = [
+    { label: 'Colombo National Hospital', category: 'Hospital', path: '/hospitals' },
+    { label: 'Kandy General Hospital', category: 'Hospital', path: '/hospitals' },
+    { label: 'O Positive (O+) Stock', category: 'Inventory', path: '/inventory' },
+    { label: 'A Positive (A+) Stock', category: 'Inventory', path: '/inventory' },
+    { label: 'AB Negative (AB-) Rare Stock', category: 'Inventory', path: '/inventory' },
+    { label: 'Accident Reports Summary', category: 'Reports', path: '/reports?tab=accident' },
+    { label: 'Disease Outbreaks Summary', category: 'Reports', path: '/reports?tab=disease' },
+    { label: 'Registered Blood Donors', category: 'Donors', path: '/donors' },
+    { label: 'Emergency Requests', category: 'Emergency', path: '/requests' },
+    { label: 'District Monitoring Map', category: 'Monitoring', path: '/monitoring' },
+    { label: 'AI Demand Prediction', category: 'Analytics', path: '/prediction' },
+    { label: 'System Users & Roles', category: 'Settings', path: '/users-roles' }
+  ];
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -426,20 +444,23 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
 
           {/* Right actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            {/* Search Input */}
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} className="header-search">
-              <Search size={16} color="var(--text-light)" style={{ position: 'absolute', left: '12px' }} />
-              <input
-                type="text"
-                placeholder="Search..."
-                style={{
+            {/* Search Input with Live Suggestions */}
+            <div style={{ width: '240px' }} className="header-search">
+              <SearchWithSuggestions
+                value={globalSearchTerm}
+                onChange={setGlobalSearchTerm}
+                placeholder="Search LifeFlow..."
+                suggestions={globalSearchSuggestions}
+                onSelect={(val) => {
+                  const item = globalSearchSuggestions.find(s => s.label === val);
+                  if (item && item.path) navigate(item.path);
+                }}
+                inputStyle={{
+                  borderRadius: '50px',
                   backgroundColor: 'var(--bg-primary)',
                   border: '1px solid var(--border-color)',
-                  borderRadius: '50px',
-                  padding: '8px 16px 8px 36px',
-                  fontSize: '0.8rem',
-                  width: '220px',
-                  color: 'var(--text-primary)'
+                  color: 'var(--text-primary)',
+                  paddingLeft: '36px'
                 }}
               />
             </div>

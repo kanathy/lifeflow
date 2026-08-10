@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle, CheckCircle } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
 const Donors = ({ user }) => {
   const [donors, setDonors] = useState([]);
@@ -237,15 +238,14 @@ const Donors = ({ user }) => {
       {/* Search Filter Panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '12px' }} className="flex-column-responsive">
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
-            <Search size={16} color="var(--text-light)" style={{ position: 'absolute', left: '12px' }} />
-            <input
-              type="text"
-              placeholder="Search by Name, District, Contact..."
+          <div style={{ flex: 1 }}>
+            <SearchWithSuggestions
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-control"
-              style={{ paddingLeft: '36px', width: '100%' }}
+              onChange={setSearchTerm}
+              placeholder="Search by Name, District, Contact..."
+              suggestions={Array.from(new Set(
+                donors.flatMap(d => [d.name, d.district, d.bloodGroup, d.phone]).filter(Boolean)
+              )).map(val => ({ label: String(val), category: 'Donor' }))}
             />
           </div>
 

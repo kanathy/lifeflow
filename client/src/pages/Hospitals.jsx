@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Building2, Phone, MapPin, Edit2, Trash2, X } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
 const Hospitals = ({ user }) => {
   const [hospitals, setHospitals] = useState([]);
@@ -255,15 +256,14 @@ const Hospitals = ({ user }) => {
       {/* Filter panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '12px' }} className="flex-column-responsive">
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
-            <Search size={16} color="var(--text-light)" style={{ position: 'absolute', left: '12px' }} />
-            <input
-              type="text"
-              placeholder="Search by Hospital Name, District, Phone..."
+          <div style={{ flex: 1 }}>
+            <SearchWithSuggestions
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-control"
-              style={{ paddingLeft: '36px', width: '100%' }}
+              onChange={setSearchTerm}
+              placeholder="Search by Hospital Name, District, Phone..."
+              suggestions={Array.from(new Set(
+                hospitals.flatMap(h => [h.name, h.district, h.type, h.contact]).filter(Boolean)
+              )).map(val => ({ label: String(val), category: 'Hospital' }))}
             />
           </div>
 

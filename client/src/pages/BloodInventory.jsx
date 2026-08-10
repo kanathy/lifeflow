@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, Edit2, Trash2, X, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
 const BloodInventory = ({ user }) => {
   const [inventory, setInventory] = useState([]);
@@ -233,16 +234,14 @@ const BloodInventory = ({ user }) => {
       {/* Search and Filters panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '12px' }} className="flex-column-responsive">
-          {/* Search box */}
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
-            <Search size={16} color="var(--text-light)" style={{ position: 'absolute', left: '12px' }} />
-            <input
-              type="text"
-              placeholder="Search by District or Blood Group..."
+          <div style={{ flex: 1 }}>
+            <SearchWithSuggestions
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-control"
-              style={{ paddingLeft: '36px', width: '100%' }}
+              onChange={setSearchTerm}
+              placeholder="Search by District or Blood Group..."
+              suggestions={Array.from(new Set(
+                inventory.flatMap(i => [i.district, i.bloodGroup, i.batchCode, i.location]).filter(Boolean)
+              )).map(val => ({ label: String(val), category: 'Stock' }))}
             />
           </div>
 

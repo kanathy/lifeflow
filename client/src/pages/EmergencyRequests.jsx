@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, AlertCircle, CheckCircle, Clock, Edit2, Trash2, X, Check, ArrowRight, CheckCircle2 } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
 const EmergencyRequests = ({ user }) => {
   const [requests, setRequests] = useState([]);
@@ -271,15 +272,14 @@ const EmergencyRequests = ({ user }) => {
       {/* Filters */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '12px' }} className="flex-column-responsive">
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
-            <Search size={16} color="var(--text-light)" style={{ position: 'absolute', left: '12px' }} />
-            <input
-              type="text"
-              placeholder="Search by Patient Name, Hospital, Request ID..."
+          <div style={{ flex: 1 }}>
+            <SearchWithSuggestions
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-control"
-              style={{ paddingLeft: '36px', width: '100%' }}
+              onChange={setSearchTerm}
+              placeholder="Search by Patient Name, Hospital, Request ID..."
+              suggestions={Array.from(new Set(
+                requests.flatMap(r => [r.requestId, r.patientName, r.hospital, r.bloodGroup, r.urgency]).filter(Boolean)
+              )).map(val => ({ label: String(val), category: 'Emergency' }))}
             />
           </div>
 
