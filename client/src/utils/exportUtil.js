@@ -17,34 +17,42 @@ export const formatDate = (dateStr) => {
   return String(dateStr);
 };
 
-// Formats report items into standard structured columns and rows based on tab context
-export const formatReportData = (dataList = [], tabType = 'accident') => {
-  let headers = [];
-  
-  if (tabType === 'accident') {
-    headers = ['DATE', 'CASE ID', 'LOCATION / DISTRICT', 'ACCIDENT TYPE', 'SEVERITY / STATUS'];
-  } else if (tabType === 'disease') {
-    headers = ['DATE', 'CASE ID', 'LOCATION', 'DISEASE TYPE', 'STATUS'];
-  } else if (tabType === 'donor') {
-    headers = ['DATE', 'DONOR ID', 'DISTRICT', 'BLOOD GROUP', 'STATUS'];
-  } else if (tabType === 'hospital') {
-    headers = ['DATE', 'HOSPITAL ID', 'DISTRICT', 'HOSPITAL TYPE', 'STATUS'];
-  } else {
-    headers = ['DATE', 'ID / CODE', 'LOCATION / DISTRICT', 'TYPE / CATEGORY', 'SEVERITY / STATUS'];
-  }
+// Formats report items into standard structured columns and rows based on tab context and column selection
+export const formatReportData = (dataList = [], tabType = 'accident', visibleColumns = null) => {
+  const allCols = [
+    { key: 'index', header: '#', getValue: (item, idx) => String(idx + 1) },
+    { key: 'id', header: tabType === 'donor' ? 'DONOR ID' : tabType === 'hospital' ? 'HOSPITAL ID' : 'CASE ID', getValue: (item) => item.caseId || item.donorId || item.hospitalId || item._id || 'N/A' },
+    { key: 'date', header: 'DATE', getValue: (item) => item.date || (item.createdAt ? formatDate(item.createdAt) : '2026-08-10') },
+    { key: 'location', header: 'LOCATION', getValue: (item) => item.location || item.district || 'N/A' },
+    { 
+      key: 'type', 
+      header: tabType === 'accident' ? 'TYPE OF ACCIDENT' :
+              tabType === 'disease' ? 'TYPE OF DISEASE' :
+              tabType === 'donor' ? 'BLOOD GROUP' :
+              tabType === 'hospital' ? 'FACILITY TYPE' : 'TYPE / CATEGORY', 
+      getValue: (item) => item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || 'N/A' 
+    },
+    { key: 'severity', header: 'SEVERITY', getValue: (item) => item.severity || 'Minor' },
+    { 
+      key: 'units', 
+      header: tabType === 'accident' ? 'NO. OF INJURED' :
+              tabType === 'disease' ? 'UNITS REQUIRED' :
+              tabType === 'inventory' ? 'UNITS AVAILABLE' : 'UNITS', 
+      getValue: (item) => String(item.injured ?? item.availableUnits ?? 1) 
+    },
+    { key: 'status', header: 'STATUS', getValue: (item) => item.status || 'Active' }
+  ];
 
-  const rows = dataList.map((item) => {
-    const date = item.date || (item.createdAt ? formatDate(item.createdAt) : '2026-08-10');
-    const id = item.caseId || item.donorId || item.hospitalId || item._id || 'N/A';
-    const location = item.location || item.district || 'N/A';
-    const category = item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || 'N/A';
-    const status = item.severity || item.status || 'Active';
+  const activeCols = visibleColumns 
+    ? allCols.filter(col => visibleColumns[col.key] !== false)
+    : allCols;
 
-    return {
-      cells: [date, id, location, category, status],
-      raw: item
-    };
-  });
+  const headers = activeCols.map(c => c.header);
+
+  const rows = dataList.map((item, idx) => ({
+    cells: activeCols.map(c => c.getValue(item, idx)),
+    raw: item
+  }));
 
   return { headers, rows };
 };
@@ -52,26 +60,19 @@ export const formatReportData = (dataList = [], tabType = 'accident') => {
 /**
  * Export data list directly to Excel-compatible CSV format
  */
-export const exportToCSV = (dataList = [], fileName = 'LifeFlow_Report.csv', reportTitle = 'MASTER REPORT', tabType = 'accident') => {
+export const exportToCSV = (dataList = [], fileName = 'LifeFlow_Report.csv', reportTitle = 'MASTER REPORT', tabType = 'accident', visibleColumns = null) => {
   let content = '\uFEFF'; // UTF-8 BOM for Microsoft Excel
   content += `=========================================================================\n`;
   content += `LIFEFLOW MASTER REPORT - ${reportTitle.toUpperCase()}\n`;
   content += `GENERATED ON: ${new Date().toLocaleString()}\n`;
   content += `=========================================================================\n\n`;
 
-  content += `# ,ID/Code,Date,Location/District,Type/Category,Severity/Status,Units/Count,Patient/Contact,Hospital\n`;
+  const { headers, rows } = formatReportData(dataList, tabType, visibleColumns);
 
-  dataList.forEach((item, idx) => {
-    const date = item.date || 'N/A';
-    const id = item.caseId || item.donorId || item.hospitalId || '';
-    const loc = item.location || item.district || '';
-    const type = item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || '';
-    const status = item.severity || item.status || '';
-    const units = item.injured ?? item.availableUnits ?? 1;
-    const name = item.patientName || item.name || '';
-    const hosp = item.hospital || '';
+  content += headers.map(h => `"${h}"`).join(',') + '\n';
 
-    content += `"${idx + 1}","${id}","${date}","${loc}","${type}","${status}","${units}","${name}","${hosp}"\n`;
+  rows.forEach((row) => {
+    content += row.cells.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\n';
   });
 
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });

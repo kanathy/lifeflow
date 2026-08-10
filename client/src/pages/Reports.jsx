@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { exportToCSV } from '../utils/exportUtil';
 import PdfPreviewModal from '../components/PdfPreviewModal';
@@ -225,6 +225,39 @@ const Reports = ({ user }) => {
   const [pdfExportData, setPdfExportData] = useState([]);
   const [pdfExportTitle, setPdfExportTitle] = useState('DAILY REPORT SUMMARY');
 
+  // Direct Date Range Pickers (No Modal Popup) & Column Selector State
+  const startDateInputRef = useRef(null);
+  const endDateInputRef = useRef(null);
+  const columnMenuRef = useRef(null);
+
+  const [startDate, setStartDate] = useState('2025-05-01');
+  const [endDate, setEndDate] = useState('2025-05-31');
+
+  // Column Selector menu state & column visibility preferences
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    index: true,
+    id: true,
+    date: true,
+    location: true,
+    type: true,
+    severity: true,
+    units: true,
+    status: true,
+    actions: true
+  });
+
+  // Click outside listener for column menu
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) {
+        setColumnMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const showSuccessToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 4000);
@@ -261,6 +294,26 @@ const Reports = ({ user }) => {
     setSeverityFilter('All Severity');
     setLocationFilter('All Locations');
   };
+
+  // Format date for display
+  const formatDateDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }).replace(/,/g, '');
+  };
+
+  // Helper to convert date strings to YYYY-MM-DD format for HTML5 date inputs
+  const formatDateForPicker = (dateStr) => {
+    if (!dateStr) return '2025-05-31';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().slice(0, 10);
+    }
+    return '2025-05-31';
+  };
+
+
 
   // Fetch Data from APIs or local fallbacks
   const fetchAllData = () => {
@@ -361,26 +414,38 @@ const Reports = ({ user }) => {
 
   const currentList = getActiveList();
 
-  // Filtered dataset based on search term and filters
+  // Filtered dataset based on search term, filters, and date range
   const filteredList = currentList.filter(item => {
     const loc = item.location || item.district || '';
     const idVal = item.caseId || item.donorId || item.hospitalId || '';
     const typeVal = item.accidentType || item.diseaseType || item.bloodGroup || item.name || '';
-    
-    const matchesSearch = 
+
+    const matchesSearch =
       idVal.toLowerCase().includes(searchTerm.toLowerCase()) ||
       loc.toLowerCase().includes(searchTerm.toLowerCase()) ||
       typeVal.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.patientName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesSeverity = 
+    const matchesSeverity =
       severityFilter === 'All Severity' || item.severity === severityFilter || item.status === severityFilter;
 
-    const matchesLocation = 
+    const matchesLocation =
       locationFilter === 'All Locations' || loc.toLowerCase().includes(locationFilter.toLowerCase());
 
-    return matchesSearch && matchesSeverity && matchesLocation;
+    // Date range filter — parse item date and compare against selected range
+    let matchesDate = true;
+    if (item.date && startDate && endDate) {
+      const itemDate = new Date(item.date);
+      const rangeStart = new Date(startDate + 'T00:00:00');
+      const rangeEnd = new Date(endDate + 'T23:59:59');
+      if (!isNaN(itemDate.getTime())) {
+        matchesDate = itemDate >= rangeStart && itemDate <= rangeEnd;
+      }
+    }
+
+    return matchesSearch && matchesSeverity && matchesLocation && matchesDate;
   });
+
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredList.length / itemsPerPage) || 1;
@@ -601,7 +666,7 @@ const Reports = ({ user }) => {
   // Single Record Export
   const handleSingleExport = (item, format) => {
     if (format === 'excel') {
-      exportToCSV([item], `${item.caseId || item.donorId || 'Record'}_Record.csv`, `${activeConfig.title} Record`, activeTab);
+      exportToCSV([item], `${item.caseId || item.donorId || 'Record'}_Record.csv`, `${activeConfig.title} Record`, activeTab, visibleColumns);
     } else {
       setPdfExportData([item]);
       setPdfExportTitle(`${item.caseId || item.donorId || item.hospitalId || 'SINGLE'} RECORD SUMMARY`);
@@ -612,7 +677,7 @@ const Reports = ({ user }) => {
   // Bulk Excel Export
   const handleExportAllExcel = () => {
     const fileName = `LifeFlow_${activeTab.toUpperCase()}_Master_Report_${new Date().toISOString().slice(0,10)}.csv`;
-    exportToCSV(filteredList, fileName, activeConfig.title, activeTab);
+    exportToCSV(filteredList, fileName, activeConfig.title, activeTab, visibleColumns);
   };
 
   // Bulk PDF / Preview Export matching reference screenshot
@@ -668,6 +733,42 @@ const Reports = ({ user }) => {
     setAddModalOpen(false);
   };
 
+  // Submit Handler for Edit Modal
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    if (!selectedCase) return;
+
+    const updatedItem = {
+      ...selectedCase,
+      location: caseForm.location,
+      accidentType: caseForm.type,
+      diseaseType: caseForm.type,
+      bloodGroup: caseForm.bloodGroup || caseForm.type,
+      hospitalType: caseForm.type,
+      severity: caseForm.severity,
+      injured: Number(caseForm.injured),
+      availableUnits: Number(caseForm.injured),
+      status: caseForm.status,
+      patientName: caseForm.patientName,
+      name: caseForm.patientName
+    };
+
+    if (activeTab === 'accident') {
+      setAccidentCases(prev => prev.map(c => (c._id === selectedCase._id || c.caseId === selectedCase.caseId) ? updatedItem : c));
+    } else if (activeTab === 'disease') {
+      setDiseaseCases(prev => prev.map(c => (c._id === selectedCase._id || c.caseId === selectedCase.caseId) ? updatedItem : c));
+    } else if (activeTab === 'donor') {
+      setDonorRecords(prev => prev.map(c => (c._id === selectedCase._id || c.caseId === selectedCase.caseId) ? updatedItem : c));
+    } else if (activeTab === 'hospital') {
+      setHospitalRecords(prev => prev.map(c => (c._id === selectedCase._id || c.caseId === selectedCase.caseId) ? updatedItem : c));
+    } else if (activeTab === 'inventory') {
+      setInventoryRecords(prev => prev.map(c => (c._id === selectedCase._id || c.caseId === selectedCase.caseId) ? updatedItem : c));
+    }
+
+    setEditModalOpen(false);
+    showSuccessToast(`Record ${selectedCase.caseId || selectedCase.donorId || selectedCase.hospitalId || ''} updated successfully`);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'Inter, sans-serif', position: 'relative' }}>
       
@@ -713,38 +814,22 @@ const Reports = ({ user }) => {
 
         {/* Right Header Toolbar Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Date Picker Pill */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            padding: '8px 14px',
-            borderRadius: '50px',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            boxShadow: 'var(--shadow-sm)'
-          }}>
-            <Calendar size={15} color="var(--text-secondary)" />
-            <span>May 01, 2025 - May 31, 2025</span>
-            <Calendar size={15} color="var(--text-secondary)" style={{ marginLeft: '4px' }} />
-          </div>
-
-          {/* Filter button */}
-          <button style={{
-            padding: '8px 12px',
-            borderRadius: '8px',
-            border: '1px solid var(--border-color)',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: 'var(--shadow-sm)'
-          }}>
-            <Filter size={16} />
+          <button
+            onClick={handleExportAllPDF}
+            className="btn btn-secondary"
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            <FileText size={16} color="#e11d48" />
+            <span>Export Report PDF</span>
           </button>
         </div>
       </div>
@@ -1052,9 +1137,210 @@ const Reports = ({ user }) => {
 
       {/* 6. Main Data Table Section */}
       <div className="dashboard-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '4px' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, fontFamily: 'Outfit', color: 'var(--text-primary)', margin: 0 }}>
-          {activeConfig.tableTitle}
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, fontFamily: 'Outfit', color: 'var(--text-primary)', margin: 0 }}>
+            {activeConfig.tableTitle}
+          </h3>
+
+          {/* Date Picker Pill & Column Selector in Table Header (Marked location in screenshot) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Date Picker Pill with dual calendar icons - Direct click picker (No Modal Popup) */}
+            <div 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                padding: '8px 16px',
+                borderRadius: '50px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                boxShadow: 'var(--shadow-sm)',
+                position: 'relative'
+              }}
+            >
+              {/* Hidden HTML5 Native Date Pickers */}
+              <input 
+                ref={startDateInputRef}
+                type="date" 
+                value={startDate} 
+                onChange={(e) => { if (e.target.value) { setStartDate(e.target.value); setCurrentPage(1); } }}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+              />
+              <input 
+                ref={endDateInputRef}
+                type="date" 
+                value={endDate} 
+                onChange={(e) => { if (e.target.value) { setEndDate(e.target.value); setCurrentPage(1); } }}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+              />
+
+              {/* Left Calendar Icon & Start Date */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (startDateInputRef.current?.showPicker) {
+                    startDateInputRef.current.showPicker();
+                  } else {
+                    startDateInputRef.current?.focus();
+                  }
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  color: 'inherit',
+                  font: 'inherit'
+                }}
+                title="Click to select Start Date"
+              >
+                <Calendar size={15} color="var(--text-secondary)" />
+                <span>{formatDateDisplay(startDate)}</span>
+              </button>
+
+              <span style={{ color: 'var(--text-light)', fontWeight: 700 }}>-</span>
+
+              {/* Right Calendar Icon & End Date */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (endDateInputRef.current?.showPicker) {
+                    endDateInputRef.current.showPicker();
+                  } else {
+                    endDateInputRef.current?.focus();
+                  }
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  color: 'inherit',
+                  font: 'inherit'
+                }}
+                title="Click to select End Date"
+              >
+                <span>{formatDateDisplay(endDate)}</span>
+                <Calendar size={15} color="var(--text-secondary)" />
+              </button>
+            </div>
+
+            {/* Column Selector Filter Button & Floating Dropdown */}
+            <div style={{ position: 'relative' }} ref={columnMenuRef}>
+              <button 
+                onClick={() => setColumnMenuOpen(!columnMenuOpen)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: columnMenuOpen ? '#FFF5F5' : 'var(--bg-secondary)',
+                  color: columnMenuOpen ? '#e11d48' : 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                title="Select Table Columns to Display"
+              >
+                <Filter size={16} />
+              </button>
+
+              {/* Column Selection Dropdown Menu */}
+              {columnMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  width: '230px',
+                  backgroundColor: 'var(--bg-card, #ffffff)',
+                  border: '1px solid var(--border-color, #e2e8f0)',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+                  padding: '12px 14px',
+                  zIndex: 9999
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    color: 'var(--text-primary)',
+                    borderBottom: '1px solid var(--border-color)',
+                    paddingBottom: '8px',
+                    marginBottom: '10px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    <span>Select Columns</span>
+                    <button 
+                      onClick={() => setVisibleColumns({
+                        index: true, id: true, date: true, location: true, type: true, severity: true, units: true, status: true, actions: true
+                      })}
+                      style={{ background: 'none', border: 'none', color: '#e11d48', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Reset
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
+                    {[
+                      { key: 'index', label: '# (Index)' },
+                      { 
+                        key: 'id', 
+                        label: activeTab === 'donor' ? 'Donor ID' :
+                               activeTab === 'hospital' ? 'Hospital ID' :
+                               activeTab === 'inventory' ? 'Batch ID' : 'Case ID'
+                      },
+                      { key: 'date', label: 'Date' },
+                      { key: 'location', label: activeTab === 'inventory' ? 'Location / Hub' : 'Location / District' },
+                      { 
+                        key: 'type', 
+                        label: activeTab === 'accident' ? 'Type of Accident' :
+                               activeTab === 'disease' ? 'Type of Disease' :
+                               activeTab === 'donor' ? 'Blood Group' :
+                               activeTab === 'hospital' ? 'Facility Type' : 'Blood Group'
+                      },
+                      { key: 'severity', label: 'Severity' },
+                      { 
+                        key: 'units', 
+                        label: activeTab === 'accident' ? 'No. of Injured' :
+                               activeTab === 'disease' ? 'Units Required' :
+                               activeTab === 'donor' ? 'Units Donated' :
+                               activeTab === 'hospital' ? 'Capacity / Units' : 'Units Available'
+                      },
+                      { key: 'status', label: 'Status' },
+                      { key: 'actions', label: 'Actions' }
+                    ].map(col => (
+                      <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', color: 'var(--text-primary)' }}>
+                        <input 
+                          type="checkbox"
+                          checked={visibleColumns[col.key]}
+                          onChange={(e) => setVisibleColumns(prev => ({ ...prev, [col.key]: e.target.checked }))}
+                          style={{ accentColor: '#e11d48', width: '14px', height: '14px', cursor: 'pointer' }}
+                        />
+                        <span>{col.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Toolbar Controls */}
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1150,124 +1436,132 @@ const Reports = ({ user }) => {
           <table className="custom-table" style={{ width: '100%' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-secondary)', fontSize: '0.8rem', textTransform: 'none' }}>
-                <th style={{ width: '40px' }}>#</th>
-                <th>CASE ID</th>
-                <th>DATE</th>
-                <th>LOCATION</th>
-                <th>
-                  {activeTab === 'accident' ? 'TYPE OF ACCIDENT' :
-                   activeTab === 'disease' ? 'TYPE OF DISEASE' :
-                   activeTab === 'donor' ? 'BLOOD GROUP' :
-                   activeTab === 'hospital' ? 'FACILITY TYPE' : 'BLOOD GROUP'}
-                </th>
-                <th>SEVERITY</th>
-                <th>
-                  {activeTab === 'accident' ? 'NO. OF INJURED' :
-                   activeTab === 'disease' ? 'UNITS REQUIRED' :
-                   activeTab === 'inventory' ? 'UNITS AVAILABLE' : 'UNITS / CAPACITY'}
-                </th>
-                <th>STATUS</th>
-                <th style={{ textAlign: 'center' }}>ACTIONS</th>
+                {visibleColumns.index && <th style={{ width: '40px' }}>#</th>}
+                {visibleColumns.id && <th>CASE ID</th>}
+                {visibleColumns.date && <th>DATE</th>}
+                {visibleColumns.location && <th>LOCATION</th>}
+                {visibleColumns.type && (
+                  <th>
+                    {activeTab === 'accident' ? 'TYPE OF ACCIDENT' :
+                     activeTab === 'disease' ? 'TYPE OF DISEASE' :
+                     activeTab === 'donor' ? 'BLOOD GROUP' :
+                     activeTab === 'hospital' ? 'FACILITY TYPE' : 'BLOOD GROUP'}
+                  </th>
+                )}
+                {visibleColumns.severity && <th>SEVERITY</th>}
+                {visibleColumns.units && (
+                  <th>
+                    {activeTab === 'accident' ? 'NO. OF INJURED' :
+                     activeTab === 'disease' ? 'UNITS REQUIRED' :
+                     activeTab === 'inventory' ? 'UNITS AVAILABLE' : 'UNITS / CAPACITY'}
+                  </th>
+                )}
+                {visibleColumns.status && <th>STATUS</th>}
+                {visibleColumns.actions && <th style={{ textAlign: 'center' }}>ACTIONS</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={Object.values(visibleColumns).filter(Boolean).length || 1} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     Loading records...
                   </td>
                 </tr>
               ) : displayedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={Object.values(visibleColumns).filter(Boolean).length || 1} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     No records found matching filters.
                   </td>
                 </tr>
               ) : (
                 displayedItems.map((item, idx) => (
                   <tr key={item._id || idx} style={{ fontSize: '0.85rem' }}>
-                    <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{startIndex + idx + 1}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.caseId || item.donorId || item.hospitalId || `REC-${idx+1}`}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{item.date || 'May 28, 2025'}</td>
-                    <td style={{ fontWeight: 500 }}>{item.location || item.district || 'Colombo'}</td>
-                    <td>{item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || 'N/A'}</td>
-                    <td>
-                      <span style={{
-                        padding: '4px 12px',
-                        borderRadius: '50px',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        backgroundColor: 
-                          (item.severity === 'Major' || item.severity === 'High') ? '#EFF6FF' :
-                          (item.severity === 'Minor' || item.severity === 'Normal') ? '#FFFBEB' : '#FFE4E6',
-                        color:
-                          (item.severity === 'Major' || item.severity === 'High') ? '#2563EB' :
-                          (item.severity === 'Minor' || item.severity === 'Normal') ? '#D97706' : '#E11D48',
-                        border: `1px solid ${
-                          (item.severity === 'Major' || item.severity === 'High') ? '#BFDBFE' :
-                          (item.severity === 'Minor' || item.severity === 'Normal') ? '#FDE68A' : '#FECDD3'
-                        }`
-                      }}>
-                        {item.severity || 'Minor'}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 700, textAlign: 'center' }}>{item.injured || item.availableUnits || 1}</td>
-                    <td>
-                      <span style={{
-                        padding: '4px 12px',
-                        borderRadius: '50px',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        backgroundColor: (item.status === 'Closed' || item.status === 'Active' || item.status === 'Optimal') ? '#F0FDF4' : '#FFFBEB',
-                        color: (item.status === 'Closed' || item.status === 'Active' || item.status === 'Optimal') ? '#16A34A' : '#D97706',
-                        border: `1px solid ${(item.status === 'Closed' || item.status === 'Active' || item.status === 'Optimal') ? '#BBF7D0' : '#FDE68A'}`
-                      }}>
-                        {item.status || 'Open'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-                        <button
-                          onClick={() => { setSelectedCase(item); setViewModalOpen(true); }}
-                          style={{
-                            padding: '6px',
-                            borderRadius: '6px',
-                            border: '1px solid var(--border-color)',
-                            backgroundColor: 'var(--bg-primary)',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <button
-                          onClick={() => { setSelectedCase(item); setCaseForm({ ...item, type: item.accidentType || item.diseaseType || item.bloodGroup }); setEditModalOpen(true); }}
-                          style={{
-                            padding: '6px',
-                            borderRadius: '6px',
-                            border: '1px solid var(--border-color)',
-                            backgroundColor: 'var(--bg-primary)',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleSingleExport(item, 'excel')}
-                          style={{
-                            padding: '6px',
-                            borderRadius: '6px',
-                            border: '1px solid var(--border-color)',
-                            backgroundColor: 'var(--bg-primary)',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Download size={14} />
-                        </button>
-                      </div>
-                    </td>
+                    {visibleColumns.index && <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{startIndex + idx + 1}</td>}
+                    {visibleColumns.id && <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.caseId || item.donorId || item.hospitalId || `REC-${idx+1}`}</td>}
+                    {visibleColumns.date && <td style={{ color: 'var(--text-secondary)' }}>{item.date || 'May 28, 2025'}</td>}
+                    {visibleColumns.location && <td style={{ fontWeight: 500 }}>{item.location || item.district || 'Colombo'}</td>}
+                    {visibleColumns.type && <td>{item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || 'N/A'}</td>}
+                    {visibleColumns.severity && (
+                      <td>
+                        <span style={{
+                          padding: '4px 12px',
+                          borderRadius: '50px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          backgroundColor:
+                            (item.severity === 'Major' || item.severity === 'High') ? '#EFF6FF' :
+                            (item.severity === 'Minor' || item.severity === 'Normal') ? '#FFFBEB' : '#FFE4E6',
+                          color:
+                            (item.severity === 'Major' || item.severity === 'High') ? '#2563EB' :
+                            (item.severity === 'Minor' || item.severity === 'Normal') ? '#D97706' : '#E11D48',
+                          border: `1px solid ${
+                            (item.severity === 'Major' || item.severity === 'High') ? '#BFDBFE' :
+                            (item.severity === 'Minor' || item.severity === 'Normal') ? '#FDE68A' : '#FECDD3'
+                          }`
+                        }}>
+                          {item.severity || 'Minor'}
+                        </span>
+                      </td>
+                    )}
+                    {visibleColumns.units && <td style={{ fontWeight: 700, textAlign: 'center' }}>{item.injured || item.availableUnits || 1}</td>}
+                    {visibleColumns.status && (
+                      <td>
+                        <span style={{
+                          padding: '4px 12px',
+                          borderRadius: '50px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          backgroundColor: (item.status === 'Closed' || item.status === 'Active' || item.status === 'Optimal') ? '#F0FDF4' : '#FFFBEB',
+                          color: (item.status === 'Closed' || item.status === 'Active' || item.status === 'Optimal') ? '#16A34A' : '#D97706',
+                          border: `1px solid ${(item.status === 'Closed' || item.status === 'Active' || item.status === 'Optimal') ? '#BBF7D0' : '#FDE68A'}`
+                        }}>
+                          {item.status || 'Open'}
+                        </span>
+                      </td>
+                    )}
+                    {visibleColumns.actions && (
+                      <td>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                          <button
+                            onClick={() => { setSelectedCase(item); setViewModalOpen(true); }}
+                            style={{ padding: '6px', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                            title="View Details"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            onClick={() => { 
+                              setSelectedCase(item); 
+                              setCaseForm({ 
+                                caseId: item.caseId || item.donorId || item.hospitalId || '',
+                                date: item.date || 'May 31, 2025',
+                                location: item.location || item.district || '',
+                                type: item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || '',
+                                severity: item.severity || 'Minor',
+                                injured: item.injured ?? item.availableUnits ?? 1,
+                                status: item.status || 'Open',
+                                patientName: item.patientName || item.name || '',
+                                bloodGroup: item.bloodGroup || 'O+',
+                                hospital: item.hospital || '',
+                                district: item.district || item.location || ''
+                              }); 
+                              setEditModalOpen(true); 
+                            }}
+                            style={{ padding: '6px', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                            title="Edit Record"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+                          <button
+                            onClick={() => handleSingleExport(item, 'pdf')}
+                            style={{ padding: '6px', borderRadius: '6px', border: '1px solid #16A34A', backgroundColor: 'transparent', color: '#16A34A', cursor: 'pointer' }}
+                            title="Download PDF"
+                          >
+                            <Download size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -1436,15 +1730,29 @@ const Reports = ({ user }) => {
             </h3>
 
             <form onSubmit={handleAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="form-group">
-                <label>Location / District</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={caseForm.location}
-                  onChange={(e) => setCaseForm({ ...caseForm, location: e.target.value })}
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Location / District</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={caseForm.location}
+                    onChange={(e) => setCaseForm({ ...caseForm, location: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={formatDateForPicker(caseForm.date)}
+                    onChange={(e) => setCaseForm({ ...caseForm, date: e.target.value })}
+                    required
+                    style={{ cursor: 'pointer' }}
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1590,6 +1898,135 @@ const Reports = ({ user }) => {
         </div>
       )}
 
+      {/* Modal: Edit Record */}
+      {editModalOpen && selectedCase && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(3px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 200
+        }}>
+          <div className="dashboard-card animate-scale-up" style={{ width: '100%', maxWidth: '480px', position: 'relative', padding: '28px' }}>
+            <button
+              onClick={() => setEditModalOpen(false)}
+              style={{ position: 'absolute', top: '18px', right: '18px', color: 'var(--text-light)', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, fontFamily: 'Outfit', marginBottom: '20px' }}>
+              Edit Record: {selectedCase.caseId || selectedCase.donorId || selectedCase.hospitalId || 'Record'}
+            </h3>
+
+            <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Location / District</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={caseForm.location}
+                    onChange={(e) => setCaseForm({ ...caseForm, location: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={formatDateForPicker(caseForm.date)}
+                    onChange={(e) => setCaseForm({ ...caseForm, date: e.target.value })}
+                    required
+                    style={{ cursor: 'pointer' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Type / Category</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={caseForm.type}
+                    onChange={(e) => setCaseForm({ ...caseForm, type: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Severity Level</label>
+                  <select
+                    className="form-control"
+                    value={caseForm.severity}
+                    onChange={(e) => setCaseForm({ ...caseForm, severity: e.target.value })}
+                  >
+                    <option value="Minor">Minor</option>
+                    <option value="Major">Major</option>
+                    <option value="Fatal">Fatal</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>No. of Injured / Units</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-control"
+                    value={caseForm.injured}
+                    onChange={(e) => setCaseForm({ ...caseForm, injured: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Status</label>
+                  <select
+                    className="form-control"
+                    value={caseForm.status}
+                    onChange={(e) => setCaseForm({ ...caseForm, status: e.target.value })}
+                  >
+                    <option value="Open">Open</option>
+                    <option value="Closed">Closed</option>
+                    <option value="Active">Active</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Patient / Entity Name</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={caseForm.patientName}
+                  onChange={(e) => setCaseForm({ ...caseForm, patientName: e.target.value })}
+                />
+              </div>
+
+              <div className="flex-between" style={{ marginTop: '14px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#e11d48', borderColor: '#e11d48' }}>
+                  Update Record
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* PDF Export Preview Modal matching screenshot */}
       <PdfPreviewModal
         isOpen={pdfModalOpen}
@@ -1597,12 +2034,15 @@ const Reports = ({ user }) => {
         data={pdfExportData}
         title={pdfExportTitle}
         activeTab={activeTab}
+        visibleColumns={visibleColumns}
         filters={{
-          fromDate: '2026-07-01',
-          toDate: '2026-08-10',
+          fromDate: startDate,
+          toDate: endDate,
           category: severityFilter !== 'All Severity' ? severityFilter : 'All'
         }}
       />
+
+
 
     </div>
 

@@ -20,6 +20,7 @@ const PdfPreviewModal = ({
   data = [], 
   title = 'DAILY SALES SUMMARY', 
   activeTab = 'accident',
+  visibleColumns = null,
   filters = { fromDate: '2026-07-01', toDate: '2026-08-10', category: 'All' }
 }) => {
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -27,7 +28,7 @@ const PdfPreviewModal = ({
 
   if (!isOpen) return null;
 
-  const { headers, rows } = formatReportData(data, activeTab);
+  const { headers, rows } = formatReportData(data, activeTab, visibleColumns);
 
   // Generate standard filename
   const sanitizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
