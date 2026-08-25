@@ -1,76 +1,235 @@
-# Python ML Microservice for Blood Shortage Forecasting
-# Install dependencies: pip install flask numpy scikit-learn
+# Python ML Microservice for LifeFlow Predictions
+# Packages required: flask pandas scikit-learn joblib
 
+import sys
+import io
+import os
+import joblib
+import pandas as pd
 from flask import Flask, request, jsonify
-import numpy as np
-# import joblib  # Used to load trained model files (e.g., joblib.load('model.pkl'))
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+# Force UTF-8 stdout so Windows cp1252 doesn't crash on special chars
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 app = Flask(__name__)
 
-@app.route('/api/predict', methods=['POST'])
-def predict_shortage():
-    """
-    Expects JSON input:
-    {
-      "accidentRate": true,
-      "outbreaks": true,
-      "weather": true,
-      "publicEvents": false,
-      "historicalUsage": true
-    }
-    """
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIRS = [
+    os.path.join(BASE_DIR, '..', 'models'),
+    os.path.join(BASE_DIR, '..', '..', 'models'),
+    os.path.join(BASE_DIR, 'models')
+]
+
+FEATURES = ['Year', 'Months', 'Month_Number', 'District', 'blood_group', 'rainfall', 'festival']
+CATEGORICAL_FEATURES = ['Months', 'District', 'blood_group']
+
+MONTH_MAP = {
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+    7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'
+}
+
+def train_model_from_dataset(dataset_filename, target_col, output_filename):
+    dataset_path = os.path.join(BASE_DIR, 'datasets', dataset_filename)
+    target_dir = os.path.join(BASE_DIR, '..', 'models')
+    os.makedirs(target_dir, exist_ok=True)
+    save_path = os.path.join(target_dir, output_filename)
+
+    if not os.path.exists(dataset_path):
+        print(f"[ERROR] Dataset not found at {dataset_path}")
+        return None
+
+    print(f"[TRAIN] Training {output_filename} from {dataset_filename} ({target_col})...")
+    df = pd.read_csv(dataset_path)
+    X = df[FEATURES]
+    y = df[target_col]
+
+    preprocessor = ColumnTransformer([
+        ('categorical', OneHotEncoder(handle_unknown='ignore'), CATEGORICAL_FEATURES)
+    ], remainder='passthrough')
+
+    model = Pipeline([
+        ('preprocessor', preprocessor),
+        ('regressor', RandomForestRegressor(n_estimators=100, max_depth=15, random_state=42, n_jobs=-1))
+    ])
+
+    model.fit(X, y)
+    try:
+        joblib.dump(model, save_path)
+        print(f"[OK] Saved {output_filename} to {save_path}")
+    except Exception as e:
+        print(f"[WARN] Could not write {save_path}: {e}")
+    return model
+
+def load_or_train_model(filename, dataset_filename, target_col):
+    for d in MODELS_DIRS:
+        path = os.path.join(d, filename)
+        if os.path.exists(path):
+            try:
+                model = joblib.load(path)
+                print(f"[OK] {filename} loaded from {path}")
+                return model
+            except Exception as e:
+                print(f"[WARN] Error loading {filename}: {e}, retraining...")
+    return train_model_from_dataset(dataset_filename, target_col, filename)
+
+# Load both models at startup
+accident_model = load_or_train_model('accident_model.pkl', 'accident_usage_dataset.csv', 'Accident_Usage')
+disease_model  = load_or_train_model('disease_model.pkl', 'disease_usage_dataset.csv', 'Disease_Usage')
+
+
+# ---------------------------------------------------------------
+# 1. Disease Usage Prediction  →  POST /api/predict/disease
+# ---------------------------------------------------------------
+@app.route('/api/predict/disease', methods=['POST'])
+def predict_disease():
+    global disease_model
     data = request.get_json() or {}
+
+    month_num = int(data.get('monthNumber', data.get('month', 1)))
+    month_str = str(data.get('months', MONTH_MAP.get(month_num, 'Jan')))
     
-    # 1. Extract active predictor flags from API request
-    accident_rate_active = data.get('accidentRate', True)
-    outbreaks_active = data.get('outbreaks', True)
-    weather_active = data.get('weather', True)
-    public_events_active = data.get('publicEvents', False)
+    input_df = pd.DataFrame([{
+        'Year': int(data.get('year', 2026)),
+        'Months': month_str,
+        'Month_Number': month_num,
+        'District': str(data.get('district', 'Colombo')),
+        'blood_group': str(data.get('bloodGroup', 'A+')),
+        'rainfall': float(data.get('rainfall', 0)),
+        'festival': int(data.get('festival', 0))
+    }])
+
+    print(f"[DISEASE REQUEST] {input_df.to_dict(orient='records')[0]}")
+
+    if disease_model is None:
+        disease_model = load_or_train_model('disease_model.pkl', 'disease_usage_dataset.csv', 'Disease_Usage')
+
+    try:
+        predicted = int(round(float(disease_model.predict(input_df)[0])))
+        predicted = max(0, predicted)
+        trend = [max(0, int(predicted * f)) for f in [0.92, 0.96, 1.0, 1.04, 0.97, 1.02, 1.05]]
+        print(f"[DISEASE RESULT] {predicted}")
+        return jsonify({
+            'predictedCases': predicted,
+            'predictedUsage': predicted,
+            'trend': trend
+        })
+    except Exception as e:
+        print(f"[WARN] Retraining disease model due to mismatch: {e}")
+        disease_model = train_model_from_dataset('disease_usage_dataset.csv', 'Disease_Usage', 'disease_model.pkl')
+        if disease_model is not None:
+            predicted = int(round(float(disease_model.predict(input_df)[0])))
+            predicted = max(0, predicted)
+            trend = [max(0, int(predicted * f)) for f in [0.92, 0.96, 1.0, 1.04, 0.97, 1.02, 1.05]]
+            return jsonify({
+                'predictedCases': predicted,
+                'predictedUsage': predicted,
+                'trend': trend
+            })
+        return jsonify({'message': f'Disease model prediction error: {str(e)}'}), 500
+
+
+# ---------------------------------------------------------------
+# 2. Accident Usage Prediction  →  POST /api/predict/accident
+# ---------------------------------------------------------------
+@app.route('/api/predict/accident', methods=['POST'])
+def predict_accident():
+    global accident_model
+    data = request.get_json() or {}
+
+    month_num = int(data.get('monthNumber', data.get('month', 1)))
+    month_str = str(data.get('months', MONTH_MAP.get(month_num, 'Jan')))
+    
+    input_df = pd.DataFrame([{
+        'Year': int(data.get('year', 2026)),
+        'Months': month_str,
+        'Month_Number': month_num,
+        'District': str(data.get('district', 'Colombo')),
+        'blood_group': str(data.get('bloodGroup', 'A+')),
+        'rainfall': float(data.get('rainfall', 0)),
+        'festival': int(data.get('festival', 0))
+    }])
+
+    print(f"[ACCIDENT REQUEST] {input_df.to_dict(orient='records')[0]}")
+
+    if accident_model is None:
+        accident_model = load_or_train_model('accident_model.pkl', 'accident_usage_dataset.csv', 'Accident_Usage')
+
+    try:
+        predicted = int(round(float(accident_model.predict(input_df)[0])))
+        predicted = max(0, predicted)
+        trend = [max(0, int(predicted * f)) for f in [0.92, 0.96, 1.0, 1.04, 0.97, 1.02, 1.05]]
+        print(f"[ACCIDENT RESULT] {predicted}")
+        return jsonify({
+            'predictedAccidents': predicted,
+            'predictedUsage': predicted,
+            'trend': trend
+        })
+    except Exception as e:
+        print(f"[WARN] Retraining accident model due to mismatch: {e}")
+        accident_model = train_model_from_dataset('accident_usage_dataset.csv', 'Accident_Usage', 'accident_model.pkl')
+        if accident_model is not None:
+            predicted = int(round(float(accident_model.predict(input_df)[0])))
+            predicted = max(0, predicted)
+            trend = [max(0, int(predicted * f)) for f in [0.92, 0.96, 1.0, 1.04, 0.97, 1.02, 1.05]]
+            return jsonify({
+                'predictedAccidents': predicted,
+                'predictedUsage': predicted,
+                'trend': trend
+            })
+        return jsonify({'message': f'Accident model prediction error: {str(e)}'}), 500
+
+
+# ---------------------------------------------------------------
+# 3. Blood Shortage Prediction  →  POST /api/predict/shortage
+# ---------------------------------------------------------------
+@app.route('/api/predict/shortage', methods=['POST'])
+def predict_shortage():
+    data = request.get_json() or {}
+
+    accident_rate_active    = data.get('accidentRate', True)
+    outbreaks_active        = data.get('outbreaks', True)
+    weather_active          = data.get('weather', True)
+    public_events_active    = data.get('publicEvents', False)
     historical_usage_active = data.get('historicalUsage', True)
 
-    # 2. Mock predictor logic mimicking an ML Regression model
-    # In your real model, you would feed raw historical district data into a trained model:
-    # X = np.array([[accident_rate_active, outbreaks_active, weather_active, public_events_active, historical_usage_active]])
-    # shortage_percentage = trained_model.predict(X)[0]
-    
     base_risk = 20
-    if accident_rate_active:
-        base_risk += 25  # High accidents raise risk
-    if outbreaks_active:
-        base_risk += 20  # Diseases (like Dengue) raise risk
-    if weather_active:
-        base_risk += 15  # Monsoons reduce donor mobilities
-    if public_events_active:
-        base_risk += 10  # Festivals increase usage
-    if not historical_usage_active:
-        base_risk -= 10  # Baseline corrections
-        
-    # Boundary check (5% to 98% risk)
+    if accident_rate_active:        base_risk += 25
+    if outbreaks_active:            base_risk += 20
+    if weather_active:              base_risk += 15
+    if public_events_active:        base_risk += 10
+    if not historical_usage_active: base_risk -= 10
+
     shortage_risk = min(98, max(5, base_risk))
-    
-    # Categorize Risk Level
-    if shortage_risk > 70:
-        risk_level = 'High Risk'
-    elif shortage_risk >= 30:
-        risk_level = 'Medium Risk'
-    else:
-        risk_level = 'Low Risk'
-        
-    # Generate 7-day future prediction trend (random fluctuations around risk factor)
-    np.random.seed(42)  # For consistent mock trend offsets
-    trend = []
-    current_val = shortage_risk
-    for i in range(7):
-        current_val += int(np.random.choice([-4, -2, 0, 2, 4]))
-        trend.append(min(98, max(5, current_val)))
+    risk_level = 'High Risk' if shortage_risk > 70 else ('Medium Risk' if shortage_risk >= 30 else 'Low Risk')
+    trend = [min(98, max(5, shortage_risk + d)) for d in [-4, -2, 0, 2, 4, 1, 3]]
 
     return jsonify({
-        'shortageRisk': shortage_risk,
-        'riskLevel': risk_level,
-        'trend': trend
+        'shortageRisk':   shortage_risk,
+        'riskLevel':      risk_level,
+        'trend':          trend,
+        'estimatedUnits': int((shortage_risk / 100) * 500)
     })
 
+
+# ---------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({
+        'status': 'online',
+        'modelsLoaded': {
+            'accident': accident_model is not None,
+            'disease':  disease_model  is not None,
+        }
+    })
+
+
 if __name__ == '__main__':
-    # Start ML Flask app on port 8000
-    print("🚀 Python Blood Shortage ML predictor starting on port 8000...")
-    app.run(port=8000, debug=True)
+    print("[START] LifeFlow ML microservice starting on port 8000...")
+    app.run(port=8000, debug=False)

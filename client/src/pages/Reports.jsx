@@ -689,7 +689,7 @@ const Reports = ({ user }) => {
 
 
   // Submit Handler for Modal
-  const handleAddSubmit = (e) => {
+  const handleAddSubmit = async (e) => {
     e.preventDefault();
     const count = currentList.length + 1;
     const prefix = activeTab === 'accident' ? 'ACC-2025-' : activeTab === 'disease' ? 'DIS-2025-' : activeTab === 'donor' ? 'DON-2025-' : activeTab === 'hospital' ? 'HSP-2025-' : 'BCH-2025-';
@@ -712,6 +712,55 @@ const Reports = ({ user }) => {
       hospital: caseForm.hospital,
       district: caseForm.district
     };
+
+    if (activeTab === 'accident' || activeTab === 'disease') {
+      const endpoint = activeTab === 'accident' ? '/api/reports/accidents' : '/api/reports/diseases';
+      const payload = {
+        caseId: newId,
+        date: newRecord.date,
+        location: newRecord.location,
+        severity: newRecord.severity,
+        injured: newRecord.injured,
+        status: newRecord.status,
+        patientName: newRecord.patientName,
+        bloodGroup: newRecord.bloodGroup,
+        hospital: newRecord.hospital,
+        district: newRecord.district,
+        ...(activeTab === 'accident'
+          ? { accidentType: caseForm.type }
+          : { diseaseType: caseForm.type })
+      };
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${user?.token || ''}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Error saving case');
+        }
+
+        const savedRecord = await response.json();
+        if (activeTab === 'accident') {
+          setAccidentCases(prev => [savedRecord, ...prev]);
+          showSuccessToast(`Accident case record (${savedRecord.caseId}) created successfully!`);
+        } else {
+          setDiseaseCases(prev => [savedRecord, ...prev]);
+          showSuccessToast(`Disease case record (${savedRecord.caseId}) registered successfully!`);
+        }
+        setAddModalOpen(false);
+      } catch (error) {
+        console.error('Case save error:', error);
+        showSuccessToast(`Error: ${error.message}`);
+      }
+      return;
+    }
 
     if (activeTab === 'accident') {
       setAccidentCases(prev => [newRecord, ...prev]);
@@ -1733,13 +1782,17 @@ const Reports = ({ user }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
                   <label>Location / District</label>
-                  <input
-                    type="text"
+                  <select
                     className="form-control"
                     value={caseForm.location}
                     onChange={(e) => setCaseForm({ ...caseForm, location: e.target.value })}
                     required
-                  />
+                  >
+                    <option value="">Select district</option>
+                    {['Ampara','Anuradhapura','Badulla','Batticaloa','Colombo','Galle','Gampaha','Hambantota','Jaffna','Kalutara','Kandy','Kegalle','Kilinochchi','Kurunegala','Mannar','Matale','Matara','Monaragala','Mullaitivu','Nuwara Eliya','Polonnaruwa','Puttalam','Ratnapura','Trincomalee','Vavuniya'].map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="form-group">
@@ -1929,13 +1982,17 @@ const Reports = ({ user }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
                   <label>Location / District</label>
-                  <input
-                    type="text"
+                  <select
                     className="form-control"
                     value={caseForm.location}
                     onChange={(e) => setCaseForm({ ...caseForm, location: e.target.value })}
                     required
-                  />
+                  >
+                    <option value="">Select district</option>
+                    {['Ampara','Anuradhapura','Badulla','Batticaloa','Colombo','Galle','Gampaha','Hambantota','Jaffna','Kalutara','Kandy','Kegalle','Kilinochchi','Kurunegala','Mannar','Matale','Matara','Monaragala','Mullaitivu','Nuwara Eliya','Polonnaruwa','Puttalam','Ratnapura','Trincomalee','Vavuniya'].map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="form-group">

@@ -186,9 +186,13 @@ const createAccidentCase = async (req, res) => {
     const cases = await dbResolver.find('AccidentCase');
     const count = cases.length + 1;
     const caseId = req.body.caseId || `ACC-2025-${String(count).padStart(3, '0')}`;
+    const location = req.body.location || req.body.district || 'Colombo';
+    const district = req.body.district || location;
     const newCase = await dbResolver.create('AccidentCase', {
       ...req.body,
       caseId,
+      location,
+      district,
       date: req.body.date || 'May 31, 2025'
     });
     res.status(201).json(newCase);
@@ -217,9 +221,13 @@ const createDiseaseCase = async (req, res) => {
     const cases = await dbResolver.find('DiseaseCase');
     const count = cases.length + 1;
     const caseId = req.body.caseId || `DIS-2025-${String(count).padStart(3, '0')}`;
+    const location = req.body.location || req.body.district || 'Colombo';
+    const district = req.body.district || location;
     const newCase = await dbResolver.create('DiseaseCase', {
       ...req.body,
       caseId,
+      location,
+      district,
       date: req.body.date || 'May 30, 2025'
     });
     res.status(201).json(newCase);
