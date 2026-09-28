@@ -1,3 +1,42 @@
+# ─── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ─── Environment Variables (API Keys & Secrets — Never commit these!) ──────────
 .env
 .env.*
 !.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+client/.env
+server/.env
+
+# ─── Build Outputs ────────────────────────────────────────────────────────────
+dist/
+build/
+client/dist/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── OS Files ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── IDE / Editor ─────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+
+# ─── Python ML Service ────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pkl
+server/ml/venv/
+server/ml/.venv/
