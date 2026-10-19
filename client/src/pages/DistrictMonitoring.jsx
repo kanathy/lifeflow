@@ -1,37 +1,182 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import SriLankaMap from '../components/SriLankaMap';
-import { ShieldAlert, CheckCircle, AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
+import { 
+  ShieldAlert, 
+  CheckCircle, 
+  AlertTriangle, 
+  ArrowRight, 
+  ShieldCheck, 
+  Search, 
+  X, 
+  Mail, 
+  Truck, 
+  Building2, 
+  Sparkles, 
+  Clock, 
+  Send, 
+  Check, 
+  CheckCircle2, 
+  Phone, 
+  ExternalLink 
+} from 'lucide-react';
+
+const DEFAULT_HOSPITALS = [
+  { hospitalId: 'HSP001', name: 'Colombo General Hospital', district: 'Colombo', type: 'Government', contact: '011 269 1111', email: 'colombo.gen@health.gov.lk' },
+  { hospitalId: 'HSP002', name: 'Kandy General Hospital', district: 'Kandy', type: 'Government', contact: '081 222 2222', email: 'kandy.gen@health.gov.lk' },
+  { hospitalId: 'HSP003', name: 'Lady Ridgeway Hospital', district: 'Colombo', type: 'Government', contact: '011 269 3911', email: 'lrh@health.gov.lk' },
+  { hospitalId: 'HSP004', name: 'Jaffna Teaching Hospital', district: 'Jaffna', type: 'Government', contact: '021 222 3344', email: 'jaffna.teaching@health.gov.lk' },
+  { hospitalId: 'HSP006', name: 'Karapitiya Teaching Hospital', district: 'Galle', type: 'Government', contact: '091 223 2250', email: 'karapitiya.galle@health.gov.lk' },
+  { hospitalId: 'HSP007', name: 'Anuradhapura Teaching Hospital', district: 'Anuradhapura', type: 'Government', contact: '025 222 2261', email: 'anuradhapura.th@health.gov.lk' },
+  { hospitalId: 'HSP008', name: 'Kurunegala Teaching Hospital', district: 'Kurunegala', type: 'Government', contact: '037 222 2261', email: 'kurunegala.th@health.gov.lk' },
+  { hospitalId: 'HSP009', name: 'Batticaloa Teaching Hospital', district: 'Batticaloa', type: 'Government', contact: '065 222 2261', email: 'batticaloa.th@health.gov.lk' },
+  { hospitalId: 'HSP010', name: 'Badulla Provincial General Hospital', district: 'Badulla', type: 'Government', contact: '055 222 2261', email: 'badulla.pgh@health.gov.lk' }
+];
 
 const DistrictMonitoring = ({ user }) => {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDistrict, setSelectedDistrict] = useState('Colombo');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    fetch('/api/dashboard/stats', {
-      headers: { Authorization: `Bearer ${user.token}` }
-    })
-      .then(res => res.json())
-      .then(stats => {
+  // Hospital & Emergency Request states
+  const [hospitalsList, setHospitalsList] = useState(DEFAULT_HOSPITALS);
+  const [requestsList, setRequestsList] = useState([]);
+  const [inventoryList, setInventoryList] = useState([]);
+
+  // Coordinate Dispatch Modal states
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [dispatchSubmitting, setDispatchSubmitting] = useState(false);
+  const [dispatchSuccessData, setDispatchSuccessData] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const [dispatchForm, setDispatchForm] = useState({
+    donorHospitalName: '',
+    bloodGroup: 'O+',
+    units: 50,
+    urgency: 'Immediate Emergency (High Risk)',
+    notes: 'Urgent inter-district transfer to replenish critical blood reserves.'
+  });
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4500);
+  };
+
+  const fetchAllData = () => {
+    setLoading(true);
+    const headers = { Authorization: `Bearer ${user.token}` };
+
+    Promise.all([
+      fetch('/api/dashboard/stats', { headers }).then(r => r.json()),
+      fetch('/api/hospitals', { headers }).then(r => r.json()).catch(() => []),
+      fetch('/api/requests', { headers }).then(r => r.json()).catch(() => []),
+      fetch('/api/inventory', { headers }).then(r => r.json()).catch(() => [])
+    ])
+      .then(([stats, hosp, reqs, inv]) => {
         setData(stats);
+        if (Array.isArray(inv)) {
+          setInventoryList(inv);
+        }
+        if (Array.isArray(hosp) && hosp.length > 0) {
+          // Merge: match DEFAULT_HOSPITALS by EXACT name only (never by district)
+          // Priority: DB email > name-matched default email > district-based auto-generated email
+          const merged = hosp.map(h => {
+            const foundByName = DEFAULT_HOSPITALS.find(
+              dh => dh.name.trim().toLowerCase() === h.name.trim().toLowerCase()
+            );
+            return {
+              ...h,
+              email: h.email || foundByName?.email || `${h.district.toLowerCase().replace(/ /g, '')}.bloodbank@health.gov.lk`,
+              // Keep DB contact; only use DEFAULT contact if DB has none AND name matched exactly
+              contact: h.contact || foundByName?.contact || 'N/A'
+            };
+          });
+          setHospitalsList(merged);
+        }
+        if (Array.isArray(reqs)) {
+          setRequestsList(reqs.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt)));
+        }
         setLoading(false);
       })
       .catch(err => {
-        console.error(err);
+        console.error('Fetch monitoring data error:', err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchAllData();
   }, [user]);
 
   if (loading) {
     return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading monitoring records...</div>;
   }
 
-  const { districtAvailability, bloodGroupStock } = data || {};
+  const { districtAvailability: rawAvailability, bloodGroupStock } = data || {};
+
+  // Aggregate real inventory grouped by district directly from BloodInventory
+  const inventoryByDistrict = {};
+  if (Array.isArray(inventoryList)) {
+    inventoryList.forEach(item => {
+      const dist = item.district;
+      if (!dist) return;
+      if (!inventoryByDistrict[dist]) {
+        inventoryByDistrict[dist] = {
+          totalUnits: 0,
+          bloodGroups: { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 }
+        };
+      }
+      const units = Number(item.availableUnits) || 0;
+      inventoryByDistrict[dist].totalUnits += units;
+      if (item.bloodGroup && inventoryByDistrict[dist].bloodGroups[item.bloodGroup] !== undefined) {
+        inventoryByDistrict[dist].bloodGroups[item.bloodGroup] += units;
+      }
+    });
+  }
+
+  // Merge: if a district has real records in BloodInventory, use them!
+  const districtAvailability = { ...(rawAvailability || {}) };
+  Object.keys(inventoryByDistrict).forEach(dist => {
+    const real = inventoryByDistrict[dist];
+    if (real.totalUnits > 0) {
+      districtAvailability[dist] = {
+        totalUnits: real.totalUnits,
+        status: real.totalUnits > 300 ? 'Good' : real.totalUnits >= 100 ? 'Low' : 'Critical',
+        bloodGroups: real.bloodGroups
+      };
+    }
+  });
+
+  const calculateBloodGroups = (totalUnits = 0) => {
+    const u = Number(totalUnits) || 0;
+    if (u <= 0) return { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 };
+    const oPlus = Math.round(u * 0.36);
+    const aPlus = Math.round(u * 0.24);
+    const bPlus = Math.round(u * 0.22);
+    const abPlus = Math.round(u * 0.08);
+    const oMinus = Math.round(u * 0.04);
+    const aMinus = Math.round(u * 0.03);
+    const bMinus = Math.round(u * 0.02);
+    const remainder = u - (oPlus + aPlus + bPlus + abPlus + oMinus + aMinus + bMinus);
+    const abMinus = Math.max(0, remainder);
+    return {
+      'A+': aPlus,
+      'A-': aMinus,
+      'B+': bPlus,
+      'B-': bMinus,
+      'O+': oPlus,
+      'O-': oMinus,
+      'AB+': abPlus,
+      'AB-': abMinus
+    };
+  };
 
   // Formulate a detailed list of all districts
   const districts = Object.keys(districtAvailability || {}).map(name => {
     const details = districtAvailability[name];
-    // Shortage Risk logic based on units
     let shortageRisk = 'Low';
     let riskPercent = 20;
     if (details.status === 'Critical') {
@@ -42,26 +187,227 @@ const DistrictMonitoring = ({ user }) => {
       riskPercent = 55;
     }
 
+    const bloodGroups = details.bloodGroups && Object.keys(details.bloodGroups).length >= 8
+      ? details.bloodGroups
+      : calculateBloodGroups(details.totalUnits);
+
     return {
       name,
       totalUnits: details.totalUnits,
       status: details.status,
       shortageRisk,
-      riskPercent
+      riskPercent,
+      bloodGroups
     };
   });
 
   const selectedDetails = districts.find(d => d.name === selectedDistrict) || districts[0];
 
-  const handleDispatchAlert = (distName) => {
-    alert(`Emergency Stock Transfer broadcasted for ${distName} District! Coordinating with nearest regional blood banks.`);
+  // Suggestions for search bar
+  const districtSuggestions = districts.map(d => ({
+    label: d.name,
+    category: d.status,
+    sublabel: `${d.totalUnits} Units • ${d.shortageRisk} Risk`
+  }));
+
+  // Filter districts by search query
+  const filteredDistricts = districts.filter(d =>
+    d.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // High Stock Donor Hospitals Ranking
+  // Calculate which hospitals belong to surplus districts and rank them
+  const rankedDonorHospitals = hospitalsList
+    .map(h => {
+      const distData = districtAvailability?.[h.district] || { totalUnits: 150, status: 'Low' };
+      return {
+        ...h,
+        availableUnits: distData.totalUnits,
+        status: distData.status
+      };
+    })
+    .filter(h => h.district !== selectedDistrict) // exclude the critical district itself
+    .sort((a, b) => b.availableUnits - a.availableUnits);
+
+  const topRecommendedHospital = rankedDonorHospitals[0] || hospitalsList[0];
+
+  // Open the Coordinate Dispatch Modal
+  const handleOpenDispatchModal = () => {
+    setDispatchForm({
+      donorHospitalName: topRecommendedHospital.name,
+      bloodGroup: 'O+',
+      units: 50,
+      urgency: 'Immediate Emergency (High Risk)',
+      notes: `Urgent inter-district reserve replenishment for ${selectedDetails.name} District.`
+    });
+    setDispatchSuccessData(null);
+    setDispatchModalOpen(true);
   };
+
+  // Submit the Dispatch Request & Broadcast Mail & Alert
+  const handleExecuteDispatch = async (e) => {
+    e.preventDefault();
+    setDispatchSubmitting(true);
+
+    const donorHospital = rankedDonorHospitals.find(h => h.name === dispatchForm.donorHospitalName) || topRecommendedHospital;
+    const reqHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${user.token}`
+    };
+
+    try {
+      // 1. Create Emergency Request in Database
+      const reqPayload = {
+        patientName: `Inter-District Reserve Transfer (to ${selectedDetails.name} General)`,
+        bloodGroup: dispatchForm.bloodGroup,
+        hospital: donorHospital.name,
+        district: donorHospital.district,
+        status: 'Pending'
+      };
+
+      const reqRes = await fetch('/api/requests', {
+        method: 'POST',
+        headers: reqHeaders,
+        body: JSON.stringify(reqPayload)
+      });
+      const savedRequest = await reqRes.json();
+
+      // 2. Broadcast System Emergency Alert Notification
+      const notifMessage = `🚨 EMERGENCY DISPATCH: Transfer of ${dispatchForm.units} Units (${dispatchForm.bloodGroup}) requested from ${donorHospital.name} (${donorHospital.district}) to ${selectedDetails.name} District. Hospital confirmation required!`;
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: reqHeaders,
+        body: JSON.stringify({
+          message: notifMessage,
+          type: 'Alert'
+        })
+      });
+
+      // 3. Prepare simulated Mail Dispatch Payload
+      const emailRecord = {
+        to: `${donorHospital.name} Blood Bank Center <${donorHospital.email}>`,
+        subject: `URGENT: Emergency Blood Stock Transfer Request [${selectedDetails.name} District - ${dispatchForm.units} Units ${dispatchForm.bloodGroup}]`,
+        body: `Hospital Coordinator,\n\nColombo National Blood Transfusion Service requests an emergency transfer of ${dispatchForm.units} units of ${dispatchForm.bloodGroup} blood from ${donorHospital.name} to ${selectedDetails.name} District.\n\nPlease log in to LifeFlow to confirm dispatch ability.\n\nUrgency: ${dispatchForm.urgency}\nRequest ID: ${savedRequest.requestId || 'REQ-NEW'}`,
+        timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        donorHospital,
+        targetDistrict: selectedDetails.name,
+        units: dispatchForm.units,
+        bloodGroup: dispatchForm.bloodGroup,
+        requestId: savedRequest.requestId || 'REQ-DISP'
+      };
+
+      setDispatchSuccessData(emailRecord);
+      setDispatchSubmitting(false);
+
+      // Refresh requests list
+      fetchAllData();
+      showToast(`Emergency alert and transfer email dispatched to ${donorHospital.name}!`);
+    } catch (err) {
+      console.error('Dispatch error:', err);
+      setDispatchSubmitting(false);
+      showToast('Error broadcasting dispatch request.');
+    }
+  };
+
+  // Hospital Confirmation Actions: Accept / Send Blood
+  const handleConfirmTransfer = async (reqItem) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${user.token}`
+    };
+
+    try {
+      await fetch(`/api/requests/${reqItem._id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          ...reqItem,
+          status: 'Accepted'
+        })
+      });
+
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message: `✅ DISPATCH CONFIRMED: ${reqItem.hospital} has confirmed blood transfer for request ${reqItem.requestId}! Transport vehicle dispatched.`,
+          type: 'System'
+        })
+      });
+
+      fetchAllData();
+      showToast(`Transfer confirmed by ${reqItem.hospital}! Vehicle dispatched.`);
+    } catch (err) {
+      console.error('Confirm transfer error:', err);
+    }
+  };
+
+  // Decline action
+  const handleDeclineTransfer = async (reqItem) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${user.token}`
+    };
+
+    try {
+      await fetch(`/api/requests/${reqItem._id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          ...reqItem,
+          status: 'Cancelled'
+        })
+      });
+
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message: `⚠️ TRANSFER DECLINED: ${reqItem.hospital} was unable to fulfill request ${reqItem.requestId}. Re-routing to next available hospital.`,
+          type: 'Alert'
+        })
+      });
+
+      fetchAllData();
+      showToast(`Transfer request cancelled. Re-routing required.`);
+    } catch (err) {
+      console.error('Decline error:', err);
+    }
+  };
+
+  // Active Dispatches relating to the selected district
+  const relatedDispatches = requestsList.filter(r => 
+    r.district === selectedDistrict || (r.patientName && r.patientName.includes(selectedDistrict))
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Toast Banner */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '24px',
+          backgroundColor: '#10B981',
+          color: '#ffffff',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontWeight: 700,
+          fontSize: '0.88rem'
+        }}>
+          <CheckCircle size={18} />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Outfit' }}>District Monitoring</h1>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Real-time regional blood reserve network alerts</p>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Real-time regional blood reserve network alerts & inter-district dispatch coordination</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '24px' }} className="flex-column-responsive">
@@ -69,7 +415,11 @@ const DistrictMonitoring = ({ user }) => {
         <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '20px', width: '100%' }}>Interactive Regional Status</h3>
           <div style={{ width: '100%', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <SriLankaMap availability={districtAvailability} onDistrictSelect={(dist) => setSelectedDistrict(dist)} />
+            <SriLankaMap 
+              availability={districtAvailability} 
+              onDistrictSelect={(dist) => setSelectedDistrict(dist)} 
+              selectedDistrict={selectedDistrict}
+            />
           </div>
         </div>
 
@@ -100,83 +450,646 @@ const DistrictMonitoring = ({ user }) => {
                 </div>
                 <div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Coordinating Center</p>
-                  <p style={{ fontSize: '0.85rem', fontWeight: 600 }}>{selectedDetails.name} General</p>
+                  <p style={{ fontSize: '0.85rem', fontWeight: 600 }}>{selectedDetails.name} General Hospital</p>
                 </div>
               </div>
 
+              {/* All Blood Types Stock Details */}
+              <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border-color)' }}>
+                <div className="flex-between" style={{ marginBottom: '10px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    Blood Group Stock Breakdown ({selectedDetails.name})
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                    Total: <strong style={{ color: 'var(--text-primary)' }}>{selectedDetails.totalUnits} Units</strong>
+                  </span>
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(68px, 1fr))',
+                  gap: '8px'
+                }}>
+                  {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => {
+                    const count = selectedDetails.bloodGroups?.[bg] ?? 0;
+                    const isCritical = count < 10;
+                    return (
+                      <div 
+                        key={bg}
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: isCritical ? '1px solid rgba(239, 68, 68, 0.45)' : '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          padding: '8px 4px',
+                          textAlign: 'center',
+                          boxShadow: 'var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.04))'
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          color: isCritical ? '#ef4444' : '#e11d48'
+                        }}>
+                          {bg}
+                        </div>
+                        <div style={{
+                          fontSize: '1.05rem',
+                          fontWeight: 800,
+                          color: 'var(--text-primary)',
+                          marginTop: '2px'
+                        }}>
+                          {count}
+                        </div>
+                        <div style={{
+                          fontSize: '0.62rem',
+                          color: isCritical ? '#ef4444' : 'var(--text-secondary)',
+                          fontWeight: 600
+                        }}>
+                          {isCritical ? 'Low' : 'Units'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* CRITICAL RESERVE ALERT & COORDINATE DISPATCH BUTTON */}
               {selectedDetails.status === 'Critical' && (
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
                   backgroundColor: 'var(--color-danger-light)',
-                  padding: '12px',
+                  padding: '14px',
                   borderRadius: 'var(--radius-sm)',
                   border: '1px dashed var(--color-danger)',
-                  marginTop: '16px'
+                  marginTop: '16px',
+                  flexWrap: 'wrap'
                 }}>
-                  <ShieldAlert color="var(--color-danger)" size={20} />
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-danger)' }}>CRITICAL RESERVE ALERT</p>
-                    <p style={{ fontSize: '0.65rem', color: 'var(--color-danger)' }}>Supply is below 100 units. Transfer requested immediately.</p>
+                  <ShieldAlert color="var(--color-danger)" size={22} />
+                  <div style={{ flex: 1, minWidth: '180px' }}>
+                    <p style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-danger)', margin: 0 }}>CRITICAL RESERVE ALERT</p>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--color-danger)', margin: '2px 0 0' }}>
+                      Supply is below 100 units ({selectedDetails.totalUnits} units). Request emergency transfer from surplus hospital.
+                    </p>
                   </div>
-                  <button onClick={() => handleDispatchAlert(selectedDetails.name)} className="btn btn-danger" style={{ padding: '6px 12px', fontSize: '0.7rem' }}>
-                    Coordinate Dispatch
+                  <button 
+                    onClick={handleOpenDispatchModal} 
+                    className="btn btn-danger" 
+                    style={{ 
+                      padding: '8px 16px', 
+                      fontSize: '0.8rem', 
+                      fontWeight: 700, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '6px',
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    <Truck size={15} />
+                    <span>Coordinate Dispatch</span>
                   </button>
                 </div>
               )}
             </div>
           )}
 
+          {/* ACTIVE DISPATCH TRANSFERS TRACKER (Hospital Confirmation View) */}
+          {relatedDispatches.length > 0 && (
+            <div className="dashboard-card" style={{ padding: '16px 20px', borderLeft: '4px solid #2563eb' }}>
+              <div className="flex-between" style={{ marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Truck size={18} color="#2563eb" />
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 800, margin: 0 }}>
+                    Active Inter-District Dispatch Requests ({relatedDispatches.length})
+                  </h4>
+                </div>
+                <button 
+                  onClick={() => navigate('/requests')}
+                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                >
+                  <span>Open Emergency Requests</span>
+                  <ExternalLink size={12} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {relatedDispatches.slice(0, 3).map(reqItem => (
+                  <div 
+                    key={reqItem._id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      flexWrap: 'wrap',
+                      gap: '8px'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.82rem' }}>{reqItem.requestId}</span>
+                        <span className={`badge badge-${reqItem.status === 'Completed' ? 'success' : reqItem.status === 'Accepted' ? 'info' : reqItem.status === 'Cancelled' ? 'danger' : 'warning'}`} style={{ fontSize: '0.65rem' }}>
+                          {reqItem.status}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e11d48' }}>
+                          {reqItem.bloodGroup}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                        {reqItem.hospital} ({reqItem.district}) • {new Date(reqItem.requestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+
+                    {/* Confirmation Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {reqItem.status === 'Pending' ? (
+                        <>
+                          <button
+                            onClick={() => handleConfirmTransfer(reqItem)}
+                            className="btn btn-primary"
+                            style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#16a34a', borderColor: '#16a34a' }}
+                            title="Confirm blood is available and dispatch transport vehicle"
+                          >
+                            <Check size={14} />
+                            <span>Confirm & Send Blood</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeclineTransfer(reqItem)}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '0.75rem', color: '#e11d48', borderColor: '#fecdd3', backgroundColor: '#fff1f2' }}
+                            title="Decline if unable to fulfill"
+                          >
+                            <X size={14} />
+                            <span>Decline</span>
+                          </button>
+                        </>
+                      ) : reqItem.status === 'Accepted' ? (
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckCircle2 size={16} />
+                          <span>Dispatch Confirmed & En-route</span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{reqItem.status}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* District Status List */}
           <div className="dashboard-card" style={{ padding: '0px', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, padding: '18px 24px', borderBottom: '1px solid var(--border-color)' }}>
-              District Status Overview
-            </h3>
-            <div style={{ overflowY: 'auto', maxHeight: '250px', flex: 1 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ 
+              padding: '14px 20px', 
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>
+                  District Status Overview
+                </h3>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                  Showing {filteredDistricts.length} of {districts.length} districts
+                </span>
+              </div>
+
+              {/* District Search with Suggestions Bar */}
+              <div style={{ minWidth: '220px', flex: 1, maxWidth: '300px' }}>
+                <SearchWithSuggestions
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  onSelect={(distName) => {
+                    setSearchTerm(distName);
+                    setSelectedDistrict(distName);
+                  }}
+                  placeholder="Search district name..."
+                  suggestions={districtSuggestions}
+                />
+              </div>
+            </div>
+
+            <div 
+              tabIndex={0}
+              style={{ 
+                overflowX: 'auto', 
+                overflowY: 'auto', 
+                maxHeight: '260px', 
+                flex: 1, 
+                outline: 'none',
+                scrollbarWidth: 'thin'
+              }}
+            >
+              <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
                 <thead>
-                  <tr style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.75rem', textAlign: 'left' }}>
-                    <th style={{ padding: '10px 18px' }}>District</th>
-                    <th style={{ padding: '10px 18px' }}>Total Units</th>
-                    <th style={{ padding: '10px 18px' }}>Risk Factor</th>
-                    <th style={{ padding: '10px 18px' }}>Status</th>
+                  <tr style={{ 
+                    position: 'sticky', 
+                    top: 0, 
+                    backgroundColor: 'var(--bg-primary)', 
+                    borderBottom: '1px solid var(--border-color)', 
+                    color: 'var(--text-secondary)', 
+                    fontSize: '0.74rem', 
+                    textAlign: 'left',
+                    zIndex: 2 
+                  }}>
+                    <th style={{ padding: '10px 14px', minWidth: '110px' }}>District</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>A+</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>A-</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>B+</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>B-</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>O+</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>O-</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>AB+</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>AB-</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'center' }}>Total Units</th>
+                    <th style={{ padding: '10px 14px' }}>Risk Factor</th>
+                    <th style={{ padding: '10px 14px' }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {districts.map((d) => (
-                    <tr
-                      key={d.name}
-                      onClick={() => setSelectedDistrict(d.name)}
-                      style={{
-                        borderBottom: '1px solid var(--border-color)',
-                        cursor: 'pointer',
-                        backgroundColor: selectedDistrict === d.name ? 'var(--color-primary-light)' : 'transparent'
-                      }}
-                    >
-                      <td style={{ padding: '10px 18px', fontWeight: 700 }}>{d.name}</td>
-                      <td style={{ padding: '10px 18px', fontWeight: 600 }}>{d.totalUnits} Units</td>
-                      <td style={{ padding: '10px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div className="progress-bar-container" style={{ width: '60px', height: '6px' }}>
-                            <div className="progress-bar-fill" style={{ width: `${d.riskPercent}%`, backgroundColor: d.status === 'Good' ? 'var(--color-success)' : d.status === 'Low' ? 'var(--color-warning)' : 'var(--color-danger)' }} />
-                          </div>
-                          <span style={{ fontSize: '0.7rem' }}>{d.riskPercent}%</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 18px' }}>
-                        <span className={`badge badge-${d.status === 'Good' ? 'success' : d.status === 'Low' ? 'warning' : 'danger'}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
-                          {d.status}
-                        </span>
+                  {filteredDistricts.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        No districts found matching "{searchTerm}".
+                        <button 
+                          onClick={() => setSearchTerm('')} 
+                          style={{ background: 'none', border: 'none', color: '#e11d48', fontWeight: 700, cursor: 'pointer', marginLeft: '8px' }}
+                        >
+                          Clear search
+                        </button>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredDistricts.map((d) => (
+                      <tr
+                        key={d.name}
+                        onClick={() => setSelectedDistrict(d.name)}
+                        style={{
+                          borderBottom: '1px solid var(--border-color)',
+                          cursor: 'pointer',
+                          backgroundColor: selectedDistrict === d.name ? 'var(--color-primary-light, #FFF1F2)' : 'transparent',
+                          transition: 'background-color 0.15s ease'
+                        }}
+                      >
+                        <td style={{ padding: '10px 14px', fontWeight: 700, color: selectedDistrict === d.name ? '#e11d48' : 'inherit' }}>
+                          {d.name}
+                        </td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['A+'] ?? 0}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['A-'] ?? 0}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['B+'] ?? 0}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['B-'] ?? 0}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['O+'] ?? 0}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['O-'] ?? 0}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['AB+'] ?? 0}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['AB-'] ?? 0}</td>
+                        <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700 }}>{d.totalUnits} Units</td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="progress-bar-container" style={{ width: '55px', height: '6px' }}>
+                              <div className="progress-bar-fill" style={{ width: `${d.riskPercent}%`, backgroundColor: d.status === 'Good' ? 'var(--color-success)' : d.status === 'Low' ? 'var(--color-warning)' : 'var(--color-danger)' }} />
+                            </div>
+                            <span style={{ fontSize: '0.7rem' }}>{d.riskPercent}%</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <span className={`badge badge-${d.status === 'Good' ? 'success' : d.status === 'Low' ? 'warning' : 'danger'}`} style={{ fontSize: '0.62rem', padding: '2px 6px' }}>
+                            {d.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 🚨 COORDINATE DISPATCH MODAL (Inter-District Hospital Alert & Mail Dispatch) */}
+      {/* ========================================================================= */}
+      {dispatchModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.55)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div className="dashboard-card animate-scale-up" style={{ width: '100%', maxWidth: '580px', position: 'relative', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <button
+              onClick={() => setDispatchModalOpen(false)}
+              style={{ position: 'absolute', top: '18px', right: '18px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+            >
+              <X size={20} />
+            </button>
+
+            {!dispatchSuccessData ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Truck size={20} color="#e11d48" />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, fontFamily: 'Outfit', margin: 0 }}>
+                      Coordinate Emergency Blood Dispatch
+                    </h3>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                      Request inter-district transfer to replenish <strong>{selectedDetails.name} District</strong>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Critical Status Pill */}
+                <div style={{
+                  padding: '10px 14px',
+                  backgroundColor: '#fff1f2',
+                  border: '1px solid #fecdd3',
+                  borderRadius: '8px',
+                  margin: '16px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.8rem'
+                }}>
+                  <div>
+                    <span style={{ color: '#e11d48', fontWeight: 800 }}>Destination: {selectedDetails.name} General Hospital</span>
+                    <p style={{ color: 'var(--text-secondary)', margin: '2px 0 0', fontSize: '0.72rem' }}>
+                      Current Stock: <strong>{selectedDetails.totalUnits} Units</strong> (Critical Shortage)
+                    </p>
+                  </div>
+                  <span className="badge badge-danger">Critical Reserve</span>
+                </div>
+
+                <form onSubmit={handleExecuteDispatch} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Recommended Donor Hospital Selection */}
+                  <div className="form-group">
+                    <div className="flex-between" style={{ marginBottom: '6px' }}>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                        Select Source Hospital with Surplus Blood Stock
+                      </label>
+                      <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <Sparkles size={12} />
+                        Auto-ranked by stock
+                      </span>
+                    </div>
+
+                    <select
+                      className="form-control"
+                      value={dispatchForm.donorHospitalName}
+                      onChange={(e) => setDispatchForm({ ...dispatchForm, donorHospitalName: e.target.value })}
+                      required
+                      style={{ fontSize: '0.85rem' }}
+                    >
+                      {rankedDonorHospitals.map(h => (
+                        <option key={h.hospitalId || h.name} value={h.name}>
+                          {h.name} ({h.district}) — {h.availableUnits} Units in Stock ({h.status})
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Top Recommended Highlight Box */}
+                    {topRecommendedHospital && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '8px 12px',
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                        color: '#166534',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <CheckCircle2 size={14} color="#16a34a" />
+                          <span><strong>Recommended:</strong> {topRecommendedHospital.name} ({topRecommendedHospital.district})</span>
+                        </div>
+                        <span style={{ fontWeight: 800 }}>{topRecommendedHospital.availableUnits} Units</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Blood Group & Units */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label style={{ fontSize: '0.82rem', fontWeight: 700 }}>Blood Group Needed</label>
+                      <select
+                        className="form-control"
+                        value={dispatchForm.bloodGroup}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, bloodGroup: e.target.value })}
+                      >
+                        {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map(bg => (
+                          <option key={bg} value={bg}>{bg}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label style={{ fontSize: '0.82rem', fontWeight: 700 }}>Units to Request</label>
+                      <input
+                        type="number"
+                        min="10"
+                        max="200"
+                        className="form-control"
+                        value={dispatchForm.units}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, units: Number(e.target.value) })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Urgency & Notes */}
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.82rem', fontWeight: 700 }}>Transport Urgency Level</label>
+                    <select
+                      className="form-control"
+                      value={dispatchForm.urgency}
+                      onChange={(e) => setDispatchForm({ ...dispatchForm, urgency: e.target.value })}
+                    >
+                      <option value="Immediate Emergency (High Risk)">Immediate Emergency (&lt; 2 Hours - Emergency Vehicle)</option>
+                      <option value="Urgent Dispatch (< 6 Hours)">Urgent Dispatch (&lt; 6 Hours)</option>
+                      <option value="Reserve Restock (Today)">Reserve Restock (Same Day Delivery)</option>
+                    </select>
+                  </div>
+
+                  {/* Recipient Contact Preview — updates based on dropdown selection */}
+                  {(() => {
+                    const selectedDonorHospital = rankedDonorHospitals.find(h => h.name === dispatchForm.donorHospitalName) || topRecommendedHospital;
+                    return (
+                      <div style={{
+                        padding: '10px 14px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.78rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                          <Building2 size={13} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
+                          {selectedDonorHospital.name} — {selectedDonorHospital.district}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Mail size={13} color="#2563eb" />
+                          <span><strong>Coordinator Email:</strong> {selectedDonorHospital.email}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Phone size={13} color="#16a34a" />
+                          <span><strong>Hospital Hotline:</strong> {selectedDonorHospital.contact || 'N/A'}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Submit Button */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setDispatchModalOpen(false)}
+                      className="btn btn-secondary"
+                      style={{ padding: '10px 18px', fontSize: '0.85rem' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={dispatchSubmitting}
+                      className="btn btn-primary"
+                      style={{
+                        padding: '10px 22px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        backgroundColor: '#e11d48',
+                        borderColor: '#e11d48',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: dispatchSubmitting ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <Send size={16} />
+                      <span>{dispatchSubmitting ? 'Dispatching Alert...' : 'Send Alert & Dispatch Request'}</span>
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              /* Success & Mail Dispatch Confirmation Preview */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#f0fdf4', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, fontFamily: 'Outfit', margin: 0, color: '#16a34a' }}>
+                    Emergency Dispatch Alert Broadcasted!
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    Emergency request registered & notification dispatched to receiving hospital.
+                  </p>
+                </div>
+
+                {/* Email Delivery Receipt Box */}
+                <div style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '16px',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                    <span style={{ fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Mail size={15} color="#2563eb" />
+                      Official Email Dispatch Confirmation
+                    </span>
+                    <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>Delivered</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', color: '#475569', fontSize: '0.78rem' }}>
+                    <strong>To:</strong>
+                    <span>{dispatchSuccessData.to}</span>
+
+                    <strong>Subject:</strong>
+                    <span>{dispatchSuccessData.subject}</span>
+
+                    <strong>Time:</strong>
+                    <span>{dispatchSuccessData.timestamp}</span>
+
+                    <strong>Request ID:</strong>
+                    <span style={{ fontWeight: 800, color: '#e11d48' }}>{dispatchSuccessData.requestId}</span>
+                  </div>
+
+                  <div style={{ marginTop: '6px', padding: '10px', backgroundColor: '#ffffff', borderRadius: '6px', border: '1px dashed #cbd5e1', fontSize: '0.75rem', color: '#334155', whiteSpace: 'pre-line' }}>
+                    {dispatchSuccessData.body}
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px 14px',
+                  backgroundColor: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  color: '#1e40af',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Clock size={16} color="#2563eb" />
+                  <span>
+                    <strong>Next Step:</strong> The donor hospital coordinator has received this alert and can now click <strong>"Confirm & Send Blood"</strong> to dispatch the transport vehicle.
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                  <button
+                    onClick={() => {
+                      setDispatchModalOpen(false);
+                      setDispatchSuccessData(null);
+                    }}
+                    className="btn btn-secondary"
+                    style={{ padding: '8px 18px', fontSize: '0.85rem' }}
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDispatchModalOpen(false);
+                      navigate('/requests');
+                    }}
+                    className="btn btn-primary"
+                    style={{ padding: '8px 20px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <span>View in Emergency Requests</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

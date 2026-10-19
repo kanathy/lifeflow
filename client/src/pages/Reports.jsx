@@ -298,8 +298,12 @@ const Reports = ({ user }) => {
   // Format date for display
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }).replace(/,/g, '');
+    const date = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }).replace(/,/g, '');
+    }
+    const fallback = new Date(dateStr);
+    return !isNaN(fallback.getTime()) ? fallback.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }).replace(/,/g, '') : dateStr;
   };
 
   // Helper to convert date strings to YYYY-MM-DD format for HTML5 date inputs
@@ -754,6 +758,21 @@ const Reports = ({ user }) => {
           setDiseaseCases(prev => [savedRecord, ...prev]);
           showSuccessToast(`Disease case record (${savedRecord.caseId}) registered successfully!`);
         }
+
+        // Auto-expand date filter so newly created records are immediately visible in the table
+        if (savedRecord.date) {
+          const recDate = new Date(savedRecord.date);
+          if (!isNaN(recDate.getTime())) {
+            const iso = recDate.toISOString().slice(0, 10);
+            if (startDate && new Date(startDate + 'T00:00:00') > recDate) {
+              setStartDate(iso);
+            }
+            if (endDate && new Date(endDate + 'T23:59:59') < recDate) {
+              setEndDate(iso);
+            }
+          }
+        }
+        setCurrentPage(1);
         setAddModalOpen(false);
       } catch (error) {
         console.error('Case save error:', error);
@@ -1227,62 +1246,115 @@ const Reports = ({ user }) => {
               />
 
               {/* Left Calendar Icon & Start Date */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (startDateInputRef.current?.showPicker) {
-                    startDateInputRef.current.showPicker();
-                  } else {
-                    startDateInputRef.current?.focus();
-                  }
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  margin: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer',
-                  color: 'inherit',
-                  font: 'inherit'
-                }}
-                title="Click to select Start Date"
-              >
-                <Calendar size={15} color="var(--text-secondary)" />
-                <span>{formatDateDisplay(startDate)}</span>
-              </button>
+              {startDate && endDate ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (startDateInputRef.current?.showPicker) {
+                        startDateInputRef.current.showPicker();
+                      } else {
+                        startDateInputRef.current?.focus();
+                      }
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      margin: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                      color: 'inherit',
+                      font: 'inherit'
+                    }}
+                    title="Click to select Start Date"
+                  >
+                    <Calendar size={15} color="var(--text-secondary)" />
+                    <span>{formatDateDisplay(startDate)}</span>
+                  </button>
 
-              <span style={{ color: 'var(--text-light)', fontWeight: 700 }}>-</span>
+                  <span style={{ color: 'var(--text-light)', fontWeight: 700 }}>-</span>
 
-              {/* Right Calendar Icon & End Date */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (endDateInputRef.current?.showPicker) {
-                    endDateInputRef.current.showPicker();
-                  } else {
-                    endDateInputRef.current?.focus();
-                  }
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  margin: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer',
-                  color: 'inherit',
-                  font: 'inherit'
-                }}
-                title="Click to select End Date"
-              >
-                <span>{formatDateDisplay(endDate)}</span>
-                <Calendar size={15} color="var(--text-secondary)" />
-              </button>
+                  {/* Right Calendar Icon & End Date */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (endDateInputRef.current?.showPicker) {
+                        endDateInputRef.current.showPicker();
+                      } else {
+                        endDateInputRef.current?.focus();
+                      }
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      margin: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                      color: 'inherit',
+                      font: 'inherit'
+                    }}
+                    title="Click to select End Date"
+                  >
+                    <span>{formatDateDisplay(endDate)}</span>
+                    <Calendar size={15} color="var(--text-secondary)" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      background: '#FFF1F2',
+                      border: '1px solid #FECDD3',
+                      color: '#E11D48',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      borderRadius: '12px',
+                      padding: '2px 8px',
+                      cursor: 'pointer',
+                      marginLeft: '4px'
+                    }}
+                    title="Show all records without date restrictions"
+                  >
+                    All Dates
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate('2025-05-01');
+                    setEndDate('2025-05-31');
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    margin: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    color: '#E11D48',
+                    font: 'inherit',
+                    fontWeight: 700
+                  }}
+                  title="Filter to May 2025 default range"
+                >
+                  <Calendar size={15} color="#E11D48" />
+                  <span>Showing All Dates (Click to filter May 2025)</span>
+                </button>
+              )}
             </div>
 
             {/* Column Selector Filter Button & Floating Dropdown */}
@@ -1527,7 +1599,7 @@ const Reports = ({ user }) => {
                   <tr key={item._id || idx} style={{ fontSize: '0.85rem' }}>
                     {visibleColumns.index && <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{startIndex + idx + 1}</td>}
                     {visibleColumns.id && <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.caseId || item.donorId || item.hospitalId || `REC-${idx+1}`}</td>}
-                    {visibleColumns.date && <td style={{ color: 'var(--text-secondary)' }}>{item.date || 'May 28, 2025'}</td>}
+                    {visibleColumns.date && <td style={{ color: 'var(--text-secondary)' }}>{formatDateDisplay(item.date) || item.date || 'May 28, 2025'}</td>}
                     {visibleColumns.location && <td style={{ fontWeight: 500 }}>{item.location || item.district || 'Colombo'}</td>}
                     {visibleColumns.type && <td>{item.accidentType || item.diseaseType || item.bloodGroup || item.hospitalType || 'N/A'}</td>}
                     {visibleColumns.severity && (

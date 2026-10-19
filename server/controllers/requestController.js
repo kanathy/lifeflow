@@ -23,7 +23,11 @@ const createRequest = async (req, res) => {
   }
 
   try {
+    const existing = await dbResolver.find('EmergencyRequest');
+    const reqId = req.body.requestId || `REQ${String(existing.length + 1).padStart(3, '0')}`;
+
     const request = await dbResolver.create('EmergencyRequest', {
+      requestId: reqId,
       patientName,
       bloodGroup,
       hospital,

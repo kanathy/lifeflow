@@ -16,7 +16,7 @@ const getHospitals = async (req, res) => {
 // @route   POST /api/hospitals
 // @access  Private
 const createHospital = async (req, res) => {
-  const { name, district, type, contact, status } = req.body;
+  const { name, district, type, contact, email, address, status } = req.body;
 
   // allow client-provided hospitalId, otherwise generate one
   const hospitalId = req.body.hospitalId || `HSP${Date.now()}`;
@@ -32,6 +32,8 @@ const createHospital = async (req, res) => {
       district,
       type: type || 'Government',
       contact,
+      email: email || '',
+      address: address || '',
       status: status || 'Active'
     });
     res.status(201).json(hospital);
@@ -44,7 +46,7 @@ const createHospital = async (req, res) => {
 // @route   PUT /api/hospitals/:id
 // @access  Private
 const updateHospital = async (req, res) => {
-  const { name, district, type, contact, status } = req.body;
+  const { name, district, type, contact, email, address, status } = req.body;
 
   try {
     const updated = await dbResolver.findByIdAndUpdate('Hospital', req.params.id, {
@@ -52,6 +54,8 @@ const updateHospital = async (req, res) => {
       district,
       type,
       contact,
+      email: email || '',
+      address: address || '',
       status
     });
 

@@ -23,6 +23,14 @@ const HospitalSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  email: {
+    type: String,
+    default: ''
+  },
+  address: {
+    type: String,
+    default: ''
+  },
   status: {
     type: String,
     enum: ['Active', 'Inactive'],

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Building2, Phone, MapPin, Edit2, Trash2, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Search, Building2, Phone, MapPin, Edit2, Trash2, X, Mail } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
@@ -20,12 +20,29 @@ const Hospitals = ({ user }) => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Table horizontal scroll ref
+  const tableContainerRef = useRef(null);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowRight') {
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollBy({ left: 180, behavior: 'smooth' });
+      }
+    } else if (e.key === 'ArrowLeft') {
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollBy({ left: -180, behavior: 'smooth' });
+      }
+    }
+  };
   const [form, setForm] = useState({
     hospitalId: '',
     name: '',
     district: 'Colombo',
     type: 'Government',
     contact: '',
+    email: '',
+    address: '',
     status: 'Active'
   });
 
@@ -38,9 +55,11 @@ const Hospitals = ({ user }) => {
   };
 
   const districtsList = [
-    'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
-    'Galle', 'Matara', 'Hambantota', 'Jaffna', 'Trincomalee', 'Batticaloa',
-    'Anuradhapura', 'Polonnaruwa', 'Badulla', 'Moneragala', 'Ratnapura', 'Kegalle'
+    'Ampara', 'Anuradhapura', 'Badulla', 'Batticaloa', 'Colombo',
+    'Galle', 'Gampaha', 'Hambantota', 'Jaffna', 'Kalutara',
+    'Kandy', 'Kegalle', 'Kilinochchi', 'Kurunegala', 'Mannar',
+    'Matale', 'Matara', 'Monaragala', 'Mullaitivu', 'Nuwara Eliya',
+    'Polonnaruwa', 'Puttalam', 'Ratnapura', 'Trincomalee', 'Vavuniya'
   ];
 
   const fetchHospitals = () => {
@@ -92,6 +111,8 @@ const Hospitals = ({ user }) => {
       district: 'Colombo',
       type: 'Government',
       contact: '',
+      email: '',
+      address: '',
       status: 'Active'
     });
     setModalOpen(true);
@@ -106,6 +127,8 @@ const Hospitals = ({ user }) => {
       district: item.district,
       type: item.type,
       contact: item.contact,
+      email: item.email || '',
+      address: item.address || '',
       status: item.status
     });
     setModalOpen(true);
@@ -291,72 +314,129 @@ const Hospitals = ({ user }) => {
               : 'No hospitals match the search criteria.'}
           </div>
         ) : (
-          <div className="table-container" style={{ margin: 0, border: 'none' }}>
-            <table className="custom-table">
-              <thead>
+          <div
+            ref={tableContainerRef}
+            className="table-container hospital-table-scroll"
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+            style={{
+              margin: 0,
+              border: 'none',
+              overflowX: 'auto',
+              overflowY: 'auto',
+              maxHeight: 'calc(100vh - 290px)',
+              minHeight: '340px',
+              width: '100%',
+              outline: 'none',
+              position: 'relative'
+            }}
+          >
+            <table className="custom-table" style={{ width: '100%', tableLayout: 'auto' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
-                  <th>Hospital ID</th>
-                  <th>Hospital Name</th>
-                  <th>District</th>
-                  <th>Sector Type</th>
-                  <th>Contact Number</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Hospital ID</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Hospital Name</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>District</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Sector Type</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Contact Number</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Coordinator Email</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Address</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Status</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', textAlign: 'center', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredHospitals.map((item, idx) => (
                   <tr key={item._id}>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>{item.hospitalId || `HSP${String(idx+1).padStart(3, '0')}`}</span>
+                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.78rem' }}>{item.hospitalId || `HSP${String(idx + 1).padStart(3, '0')}`}</span>
                     </td>
-                    <td style={{ fontWeight: 700 }}>{item.name}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <MapPin size={12} color="var(--text-light)" />
+                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap', padding: '9px 8px', fontSize: '0.8rem' }}>{item.name}</td>
+                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px', fontSize: '0.78rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MapPin size={11} color="var(--text-light)" />
                         <span>{item.district}</span>
                       </div>
                     </td>
-                    <td>
-                      <span className={`badge badge-${item.type === 'Government' ? 'success' : 'info'}`}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                      <span className={`badge badge-${item.type === 'Government' ? 'success' : 'info'}`} style={{ fontSize: '0.7rem', padding: '2px 7px' }}>
                         {item.type}
                       </span>
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Phone size={12} color="var(--text-light)" />
-                        <span>{item.contact}</span>
+                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Phone size={11} color="var(--text-light)" />
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{item.contact}</span>
                       </div>
                     </td>
-                    <td>
-                      <span className={`badge badge-${item.status === 'Active' ? 'success' : 'danger'}`}>
+                    {/* Email column */}
+                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                      {item.email ? (
+                        <a
+                          href={`mailto:${item.email}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            color: '#2563eb',
+                            fontSize: '0.75rem',
+                            textDecoration: 'none',
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap'
+                          }}
+                          title={item.email}
+                        >
+                          <Mail size={11} />
+                          <span>{item.email}</span>
+                        </a>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>—</span>
+                      )}
+                    </td>
+                    {/* Address column */}
+                    <td style={{ padding: '9px 8px', maxWidth: '170px' }}>
+                      {item.address ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+                          <Building2 size={11} color="var(--text-light)" style={{ flexShrink: 0 }} />
+                          <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.address}>
+                            {item.address}
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                      <span className={`badge badge-${item.status === 'Active' ? 'success' : 'danger'}`} style={{ fontSize: '0.7rem', padding: '2px 7px' }}>
                         {item.status}
                       </span>
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'center', padding: '9px 8px' }}>
+                      <div style={{ display: 'inline-flex', gap: '5px', justifyContent: 'center' }}>
                         <button
                           onClick={() => handleOpenEdit(item)}
                           style={{
-                            padding: '6px',
+                            padding: '4px 6px',
                             border: '1px solid var(--border-color)',
                             borderRadius: '4px',
                             color: 'var(--text-sidebar)'
                           }}
+                          title="Edit Hospital"
                         >
-                          <Edit2 size={12} />
+                          <Edit2 size={11} />
                         </button>
                         <button
                           onClick={() => handleDelete(item)}
                           style={{
-                            padding: '6px',
+                            padding: '4px 6px',
                             border: '1px solid var(--border-color)',
                             borderRadius: '4px',
                             color: 'var(--color-danger)',
                             backgroundColor: 'var(--color-danger-light)'
                           }}
+                          title="Delete Hospital"
                         >
-                          <Trash2 size={12} />
+                          <Trash2 size={11} />
                         </button>
                       </div>
                     </td>
@@ -468,6 +548,28 @@ const Hospitals = ({ user }) => {
                     <option value="Inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label>Coordinator Email <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.75rem' }}>(used for emergency dispatch alerts)</span></label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="form-control"
+                  placeholder="e.g. bloodbank@hospital.gov.lk"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Hospital Address</label>
+                <input
+                  type="text"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  className="form-control"
+                  placeholder="e.g. Hospital Road, Colombo 08"
+                />
               </div>
 
               <div className="flex-between" style={{ marginTop: '16px' }}>

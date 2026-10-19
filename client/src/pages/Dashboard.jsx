@@ -19,14 +19,20 @@ const Dashboard = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [inventoryList, setInventoryList] = useState([]);
+
   const fetchStats = () => {
     setRefreshing(true);
-    fetch('/api/dashboard/stats', {
-      headers: { Authorization: `Bearer ${user.token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
+    const headers = { Authorization: `Bearer ${user.token}` };
+    Promise.all([
+      fetch('/api/dashboard/stats', { headers }).then(res => res.json()),
+      fetch('/api/inventory', { headers }).then(res => res.json()).catch(() => [])
+    ])
+      .then(([data, inv]) => {
         setStats(data);
+        if (Array.isArray(inv)) {
+          setInventoryList(inv);
+        }
         setLoading(false);
         setRefreshing(false);
       })
@@ -51,7 +57,39 @@ const Dashboard = ({ user }) => {
     );
   }
 
-  const { cards, bloodGroupStock, districtAvailability, predictions, monthlyOverview, recentRequests, recentDonations } = stats || {};
+  const { cards, bloodGroupStock, districtAvailability: rawAvailability, predictions, monthlyOverview, recentRequests, recentDonations } = stats || {};
+
+  // Aggregate real inventory grouped by district directly from BloodInventory
+  const inventoryByDistrict = {};
+  if (Array.isArray(inventoryList)) {
+    inventoryList.forEach(item => {
+      const dist = item.district;
+      if (!dist) return;
+      if (!inventoryByDistrict[dist]) {
+        inventoryByDistrict[dist] = {
+          totalUnits: 0,
+          bloodGroups: { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 }
+        };
+      }
+      const units = Number(item.availableUnits) || 0;
+      inventoryByDistrict[dist].totalUnits += units;
+      if (item.bloodGroup && inventoryByDistrict[dist].bloodGroups[item.bloodGroup] !== undefined) {
+        inventoryByDistrict[dist].bloodGroups[item.bloodGroup] += units;
+      }
+    });
+  }
+
+  const districtAvailability = { ...(rawAvailability || {}) };
+  Object.keys(inventoryByDistrict).forEach(dist => {
+    const real = inventoryByDistrict[dist];
+    if (real.totalUnits > 0) {
+      districtAvailability[dist] = {
+        totalUnits: real.totalUnits,
+        status: real.totalUnits > 300 ? 'Good' : real.totalUnits >= 100 ? 'Low' : 'Critical',
+        bloodGroups: real.bloodGroups
+      };
+    }
+  });
 
   // Custom SVG Line Chart coordinates helper
   // Map monthly data to coordinates inside a 500x200 viewBox
