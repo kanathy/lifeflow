@@ -22,6 +22,67 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+// ─── Sri Lanka District GPS Coordinates (lat, lng) ────────────────────────────
+const DISTRICT_COORDS = {
+  'Ampara':        { lat: 7.2975,  lng: 81.6747 },
+  'Anuradhapura':  { lat: 8.3114,  lng: 80.4037 },
+  'Badulla':       { lat: 6.9934,  lng: 81.0550 },
+  'Batticaloa':    { lat: 7.7310,  lng: 81.6747 },
+  'Colombo':       { lat: 6.9271,  lng: 79.8612 },
+  'Galle':         { lat: 6.0535,  lng: 80.2210 },
+  'Gampaha':       { lat: 7.0840,  lng: 79.9989 },
+  'Hambantota':    { lat: 6.1241,  lng: 81.1185 },
+  'Jaffna':        { lat: 9.6615,  lng: 80.0255 },
+  'Kalutara':      { lat: 6.5854,  lng: 79.9607 },
+  'Kandy':         { lat: 7.2906,  lng: 80.6337 },
+  'Kegalle':       { lat: 7.2513,  lng: 80.3464 },
+  'Kilinochchi':   { lat: 9.3803,  lng: 80.3770 },
+  'Kurunegala':    { lat: 7.4867,  lng: 80.3647 },
+  'Mannar':        { lat: 8.9810,  lng: 79.9044 },
+  'Matale':        { lat: 7.4675,  lng: 80.6234 },
+  'Matara':        { lat: 5.9549,  lng: 80.5550 },
+  'Monaragala':    { lat: 6.8728,  lng: 81.3506 },
+  'Mullaitivu':    { lat: 9.2671,  lng: 80.8128 },
+  'Nuwara Eliya':  { lat: 6.9497,  lng: 80.7891 },
+  'Polonnaruwa':   { lat: 7.9403,  lng: 81.0188 },
+  'Puttalam':      { lat: 8.0362,  lng: 79.8283 },
+  'Ratnapura':     { lat: 6.6828,  lng: 80.3992 },
+  'Trincomalee':   { lat: 8.5874,  lng: 81.2152 },
+  'Vavuniya':      { lat: 8.7514,  lng: 80.4971 }
+};
+
+// ─── Haversine distance (km) between two districts ─────────────────────────────
+const distanceBetweenDistricts = (distA, distB) => {
+  const a = DISTRICT_COORDS[distA];
+  const b = DISTRICT_COORDS[distB];
+  if (!a || !b) return 999;
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const c = 2 * Math.asin(Math.sqrt(sinDLat * sinDLat + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinDLng * sinDLng));
+  return Math.round(R * c);
+};
+
+// ─── Composite score: higher = better donor ─────────────────────────────────────
+// Score = (stockScore × 0.6) + (proximityScore × 0.4)
+// stockScore    : normalized 0–100 based on available units
+// proximityScore: normalized 0–100, closer = higher
+const computeDonorScore = (hospitals, destinationDistrict) => {
+  if (!hospitals.length) return hospitals;
+  const maxUnits = Math.max(...hospitals.map(h => h.availableUnits), 1);
+  const maxDist  = Math.max(...hospitals.map(h => distanceBetweenDistricts(h.district, destinationDistrict)), 1);
+
+  return hospitals.map(h => {
+    const dist = distanceBetweenDistricts(h.district, destinationDistrict);
+    const stockScore     = (h.availableUnits / maxUnits) * 100;
+    const proximityScore = ((maxDist - dist) / maxDist) * 100;
+    const score          = stockScore * 0.6 + proximityScore * 0.4;
+    return { ...h, distanceKm: dist, score: Math.round(score * 10) / 10 };
+  });
+};
+
 const DEFAULT_HOSPITALS = [
   { hospitalId: 'HSP001', name: 'Colombo General Hospital', district: 'Colombo', type: 'Government', contact: '011 269 1111', email: 'colombo.gen@health.gov.lk' },
   { hospitalId: 'HSP002', name: 'Kandy General Hospital', district: 'Kandy', type: 'Government', contact: '081 222 2222', email: 'kandy.gen@health.gov.lk' },
@@ -211,19 +272,19 @@ const DistrictMonitoring = ({ user }) => {
     d.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // High Stock Donor Hospitals Ranking
-  // Calculate which hospitals belong to surplus districts and rank them
-  const rankedDonorHospitals = hospitalsList
-    .map(h => {
-      const distData = districtAvailability?.[h.district] || { totalUnits: 0, status: 'Critical' };
-      return {
-        ...h,
-        availableUnits: distData.totalUnits,
-        status: distData.status
-      };
-    })
-    .filter(h => h.district !== selectedDistrict) // exclude the critical district itself
-    .sort((a, b) => b.availableUnits - a.availableUnits);
+  // ── Smart Donor Hospital Ranking ──────────────────────────────────────────────
+  // Composite score: 60% blood stock units + 40% proximity to destination district
+  const rankedDonorHospitals = (() => {
+    const mapped = hospitalsList
+      .map(h => {
+        const distData = districtAvailability?.[h.district] || { totalUnits: 0, status: 'Critical' };
+        return { ...h, availableUnits: distData.totalUnits, status: distData.status };
+      })
+      .filter(h => h.district !== selectedDistrict); // exclude the critical district itself
+
+    const scored = computeDonorScore(mapped, selectedDistrict);
+    return scored.sort((a, b) => b.score - a.score);
+  })();
 
   const topRecommendedHospital = rankedDonorHospitals[0] || hospitalsList[0];
   const selectedDonorHospital = rankedDonorHospitals.find(h => h.name === dispatchForm.donorHospitalName) || topRecommendedHospital;
@@ -489,41 +550,37 @@ const DistrictMonitoring = ({ user }) => {
                 }}>
                   {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => {
                     const count = selectedDetails.bloodGroups?.[bg] ?? 0;
-                    const isCritical = count < 10;
+                    const bgStatus = count > 50 ? 'Good' : count >= 20 ? 'Low' : 'Critical';
+                    const palette =
+                      bgStatus === 'Good'
+                        ? { bg: '#f0fdf4', border: '#86efac', text: '#15803d', labelColor: '#16a34a' }
+                        : bgStatus === 'Low'
+                        ? { bg: '#fffbeb', border: '#fcd34d', text: '#92400e', labelColor: '#d97706' }
+                        : { bg: '#fff1f2', border: '#fda4af', text: '#be123c', labelColor: '#e11d48' };
                     return (
                       <div
                         key={bg}
                         style={{
-                          backgroundColor: 'var(--bg-secondary)',
-                          border: isCritical ? '1px solid rgba(239, 68, 68, 0.45)' : '1px solid var(--border-color)',
+                          backgroundColor: palette.bg,
+                          border: `1px solid ${palette.border}`,
                           borderRadius: '8px',
                           padding: '8px 4px',
                           textAlign: 'center',
                           boxShadow: 'var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.04))'
                         }}
                       >
+                        <div style={{ fontSize: '0.8rem', fontWeight: 800, color: palette.text }}>{bg}</div>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: palette.text, marginTop: '2px' }}>{count}</div>
                         <div style={{
-                          fontSize: '0.8rem',
-                          fontWeight: 800,
-                          color: isCritical ? '#ef4444' : '#e11d48'
-                        }}>
-                          {bg}
-                        </div>
-                        <div style={{
-                          fontSize: '1.05rem',
-                          fontWeight: 800,
-                          color: 'var(--text-primary)',
-                          marginTop: '2px'
-                        }}>
-                          {count}
-                        </div>
-                        <div style={{
-                          fontSize: '0.62rem',
-                          color: isCritical ? '#ef4444' : 'var(--text-secondary)',
-                          fontWeight: 600
-                        }}>
-                          {isCritical ? 'Low' : 'Units'}
-                        </div>
+                          display: 'inline-block',
+                          marginTop: '3px',
+                          backgroundColor: palette.border,
+                          color: palette.text,
+                          fontSize: '0.58rem',
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: '10px'
+                        }}>{bgStatus}</div>
                       </div>
                     );
                   })}
@@ -531,43 +588,81 @@ const DistrictMonitoring = ({ user }) => {
               </div>
 
               {/* CRITICAL RESERVE ALERT & COORDINATE DISPATCH BUTTON */}
-              {selectedDetails.status === 'Critical' && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  backgroundColor: 'var(--color-danger-light)',
-                  padding: '14px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px dashed var(--color-danger)',
-                  marginTop: '16px',
-                  flexWrap: 'wrap'
-                }}>
-                  <ShieldAlert color="var(--color-danger)" size={22} />
-                  <div style={{ flex: 1, minWidth: '180px' }}>
-                    <p style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-danger)', margin: 0 }}>CRITICAL RESERVE ALERT</p>
-                    <p style={{ fontSize: '0.72rem', color: 'var(--color-danger)', margin: '2px 0 0' }}>
-                      Supply is below 100 units ({selectedDetails.totalUnits} units). Request emergency transfer from surplus hospital.
-                    </p>
+              {(() => {
+                const BG_ORDER = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+                const bgEntries = BG_ORDER.map(bg => ({ bg, units: selectedDetails.bloodGroups?.[bg] ?? 0 }));
+                const criticalBGs = bgEntries.filter(e => e.units < 20).sort((a, b) => a.units - b.units);
+                const mostCriticalBG = criticalBGs[0]?.bg || 'O+';
+                const criticalLabels = criticalBGs.slice(0, 4).map(e => `${e.bg}(${e.units})`).join(', ');
+
+                // Show dispatch if: overall Critical OR any individual blood type is Critical
+                const overallCritical = selectedDetails.status === 'Critical';
+                const hasBloodTypeCritical = criticalBGs.length > 0;
+                if (!overallCritical && !hasBloodTypeCritical) return null;
+
+                const isPartialCritical = !overallCritical && hasBloodTypeCritical;
+
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    backgroundColor: isPartialCritical ? '#fff7ed' : 'var(--color-danger-light)',
+                    padding: '14px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: `1px dashed ${isPartialCritical ? '#f97316' : 'var(--color-danger)'}`,
+                    marginTop: '16px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <ShieldAlert color={isPartialCritical ? '#f97316' : 'var(--color-danger)'} size={22} />
+                    <div style={{ flex: 1, minWidth: '180px' }}>
+                      <p style={{ fontSize: '0.8rem', fontWeight: 800, color: isPartialCritical ? '#c2410c' : 'var(--color-danger)', margin: 0 }}>
+                        {isPartialCritical ? 'BLOOD TYPE SHORTAGE ALERT' : 'CRITICAL RESERVE ALERT'}
+                      </p>
+                      <p style={{ fontSize: '0.72rem', color: isPartialCritical ? '#c2410c' : 'var(--color-danger)', margin: '2px 0 0' }}>
+                        {isPartialCritical
+                          ? `Overall stock is Low (${selectedDetails.totalUnits} units) but some blood types are critically short.`
+                          : `Supply is below 100 units (${selectedDetails.totalUnits} units). Request emergency transfer from surplus hospital.`
+                        }
+                      </p>
+                      {criticalBGs.length > 0 && (
+                        <p style={{ fontSize: '0.68rem', color: isPartialCritical ? '#ea580c' : '#be123c', margin: '4px 0 0', fontWeight: 700 }}>
+                          🩸 Most needed: {criticalLabels} units
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setDispatchForm(prev => ({
+                          ...prev,
+                          bloodGroup: mostCriticalBG,
+                          donorHospitalName: topRecommendedHospital?.name || '',
+                          units: 50,
+                          urgency: isPartialCritical ? 'Urgent (Medium Risk)' : 'Immediate Emergency (High Risk)',
+                          notes: `Urgent inter-district transfer to replenish critical blood reserves (${mostCriticalBG} critically low at ${selectedDetails.name}).`
+                        }));
+                        setDispatchSuccessData(null);
+                        setDispatchModalOpen(true);
+                      }}
+                      className="btn btn-danger"
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: isPartialCritical ? '#f97316' : undefined,
+                        borderColor: isPartialCritical ? '#f97316' : undefined
+                      }}
+                    >
+                      <Truck size={15} />
+                      <span>Coordinate Dispatch</span>
+                    </button>
                   </div>
-                  <button
-                    onClick={handleOpenDispatchModal}
-                    className="btn btn-danger"
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Truck size={15} />
-                    <span>Coordinate Dispatch</span>
-                  </button>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -837,25 +932,56 @@ const DistrictMonitoring = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Critical Status Pill */}
+                {/* Destination Hospital — Per Blood Type Status */}
                 <div style={{
-                  padding: '10px 14px',
+                  padding: '12px 14px',
                   backgroundColor: '#fff1f2',
                   border: '1px solid #fecdd3',
                   borderRadius: '8px',
                   margin: '16px 0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
                   fontSize: '0.8rem'
                 }}>
-                  <div>
-                    <span style={{ color: '#e11d48', fontWeight: 800 }}>Destination: {selectedDetails.name} General Hospital</span>
-                    <p style={{ color: 'var(--text-secondary)', margin: '2px 0 0', fontSize: '0.72rem' }}>
-                      Current Stock: <strong>{selectedDetails.totalUnits} Units</strong> (Critical Shortage)
-                    </p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <div>
+                      <span style={{ color: '#e11d48', fontWeight: 800 }}>Destination: {selectedDetails.name} General Hospital</span>
+                      <p style={{ color: 'var(--text-secondary)', margin: '2px 0 0', fontSize: '0.72rem' }}>
+                        Total Stock: <strong>{selectedDetails.totalUnits} Units</strong> — Blood type breakdown below
+                      </p>
+                    </div>
+                    <span className="badge badge-danger">Critical Reserve</span>
                   </div>
-                  <span className="badge badge-danger">Critical Reserve</span>
+
+                  {/* Per Blood Type Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                    {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => {
+                      const units = selectedDetails.bloodGroups?.[bg] ?? 0;
+                      const bgStatus = units > 50 ? 'Good' : units >= 20 ? 'Low' : 'Critical';
+                      const bgColor  = bgStatus === 'Good' ? { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', badge: '#dcfce7', badgeText: '#166534' }
+                                     : bgStatus === 'Low'  ? { bg: '#fffbeb', border: '#fde68a', text: '#92400e', badge: '#fef3c7', badgeText: '#92400e' }
+                                     :                       { bg: '#fff1f2', border: '#fecdd3', text: '#be123c', badge: '#ffe4e6', badgeText: '#be123c' };
+                      return (
+                        <div key={bg} style={{
+                          backgroundColor: bgColor.bg,
+                          border: `1px solid ${bgColor.border}`,
+                          borderRadius: '6px',
+                          padding: '6px 8px',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ fontWeight: 800, fontSize: '0.82rem', color: bgColor.text }}>{bg}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: bgColor.text, margin: '2px 0' }}>{units}</div>
+                          <div style={{
+                            display: 'inline-block',
+                            backgroundColor: bgColor.badge,
+                            color: bgColor.badgeText,
+                            fontSize: '0.58rem',
+                            fontWeight: 700,
+                            padding: '1px 5px',
+                            borderRadius: '10px'
+                          }}>{bgStatus}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <form onSubmit={handleExecuteDispatch} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -867,7 +993,7 @@ const DistrictMonitoring = ({ user }) => {
                       </label>
                       <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
                         <Sparkles size={12} />
-                        Auto-ranked by stock
+                        Stock + Distance Score
                       </span>
                     </div>
 
@@ -878,12 +1004,15 @@ const DistrictMonitoring = ({ user }) => {
                       required
                       style={{ fontSize: '0.85rem' }}
                     >
-                      {rankedDonorHospitals.map(h => (
+                      {rankedDonorHospitals.map((h, idx) => (
                         <option key={h.hospitalId || h.name} value={h.name}>
-                          {h.name} ({h.district}) — {h.availableUnits} Units in Stock ({h.status})
+                          #{idx + 1} {h.name} ({h.district}) — {h.availableUnits} Units • {h.distanceKm ?? '?'} km • Score: {h.score ?? '—'}
                         </option>
                       ))}
                     </select>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '4px', marginBottom: 0 }}>
+                      Ranked by composite score: 60% stock surplus + 40% proximity to destination
+                    </p>
 
                     {/* Top Recommended Highlight Box */}
                     {topRecommendedHospital && (
@@ -903,7 +1032,12 @@ const DistrictMonitoring = ({ user }) => {
                           <CheckCircle2 size={14} color="#16a34a" />
                           <span><strong>Recommended:</strong> {topRecommendedHospital.name} ({topRecommendedHospital.district})</span>
                         </div>
-                        <span style={{ fontWeight: 800 }}>{topRecommendedHospital.availableUnits} Units</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          <span style={{ fontWeight: 800 }}>{topRecommendedHospital.availableUnits} Units</span>
+                          <span style={{ fontSize: '0.68rem', color: '#15803d' }}>
+                            {topRecommendedHospital.distanceKm ?? '?'} km away • Score: {topRecommendedHospital.score ?? '—'}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
