@@ -77,9 +77,21 @@ def load_or_train_model(filename, dataset_filename, target_col):
                 print(f"[WARN] Error loading {filename}: {e}, retraining...")
     return train_model_from_dataset(dataset_filename, target_col, filename)
 
-# Load both models at startup
+# Load models at startup
 accident_model = load_or_train_model('accident_model.pkl', 'accident_usage_dataset.csv', 'Accident_Usage')
 disease_model  = load_or_train_model('disease_model.pkl', 'disease_usage_dataset.csv', 'Disease_Usage')
+
+# Load all districts prophet rainfall models
+prophet_models = None
+for d in MODELS_DIRS:
+    p_path = os.path.join(d, 'all_districts_prophet_models.pkl')
+    if os.path.exists(p_path):
+        try:
+            prophet_models = joblib.load(p_path)
+            print(f"[OK] all_districts_prophet_models.pkl loaded successfully ({len(prophet_models)} districts)")
+            break
+        except Exception as e:
+            print(f"[WARN] Error loading prophet models from {p_path}: {e}")
 
 
 # ---------------------------------------------------------------
@@ -217,6 +229,72 @@ def predict_shortage():
 
 
 # ---------------------------------------------------------------
+# 4. Prophet Rainfall Prediction  →  POST /api/predict/rainfall
+# ---------------------------------------------------------------
+@app.route('/api/predict/rainfall', methods=['POST'])
+def predict_rainfall():
+    global prophet_models
+    data = request.get_json() or {}
+
+    district = str(data.get('district', 'Colombo')).strip()
+    month = int(data.get('month', data.get('monthNumber', 1)))
+    year = int(data.get('year', 2026))
+
+    if prophet_models is None:
+        for d in MODELS_DIRS:
+            p_path = os.path.join(d, 'all_districts_prophet_models.pkl')
+            if os.path.exists(p_path):
+                try:
+                    prophet_models = joblib.load(p_path)
+                    break
+                except Exception as e:
+                    print(f"[WARN] Error loading prophet models from {p_path}: {e}")
+
+    if not prophet_models:
+        return jsonify({'message': 'Prophet models file not loaded'}), 500
+
+    mapping = {
+        'gampaha': 'DailyPPTGampaha',
+        'nuwara eliya': 'NUwaraEliya',
+        'nuwaraeliya': 'NUwaraEliya',
+        'puttalam': 'Puttlam',
+        'puttlam': 'Puttlam',
+        'vavuniya': 'Vauniya',
+        'vauniya': 'Vauniya',
+        'monaragala': 'Monaragala',
+        'moneragala': 'Monaragala'
+    }
+    key = mapping.get(district.lower(), district)
+    if key not in prophet_models:
+        for k in prophet_models.keys():
+            if k.lower() == district.lower() or district.lower() in k.lower():
+                key = k
+                break
+        else:
+            key = 'Colombo'
+
+    try:
+        model = prophet_models[key]
+        ds_str = f"{year}-{month:02d}-15"
+        future_df = pd.DataFrame({'ds': [pd.to_datetime(ds_str)]})
+        forecast = model.predict(future_df)
+        val = float(forecast['yhat'].values[0])
+        val = max(0.0, round(val, 1))
+
+        print(f"[PROPHET RAINFALL] {district} ({key}) {year}-{month} -> {val} mm")
+        return jsonify({
+            'district': district,
+            'month': month,
+            'year': year,
+            'rainfall': val,
+            'model': 'Prophet'
+        })
+    except Exception as e:
+        print(f"[ERROR] Prophet forecast failed: {e}")
+        return jsonify({'message': str(e)}), 500
+
+
+# ---------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------
 @app.route('/health', methods=['GET'])
@@ -226,6 +304,7 @@ def health():
         'modelsLoaded': {
             'accident': accident_model is not None,
             'disease':  disease_model  is not None,
+            'prophet':  prophet_models is not None
         }
     })
 

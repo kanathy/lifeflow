@@ -774,63 +774,28 @@ const DISTRICT_RAINFALL = {
   'Vavuniya': 58
 };
 
-const getTodayRainfall = (district) => {
-  if (!district) return 120;
-  const base = DISTRICT_RAINFALL[district] || 120;
-  const day = new Date().getDate();
-  const variation = ((day * 7) % 21) - 10; // Dynamic stable variation based on today's date
-  return Math.max(15, base + variation);
-};
-
-// ============================================================================
-// 🌦️ OPENWEATHERMAP API INTEGRATION
-// உங்கள் OpenWeatherMap API Key-ஐ கீழே உள்ள variable-ல் paste செய்யவும்:
-// ============================================================================
-export const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
-
-export const fetchOpenWeatherRainfall = async (district) => {
-  if (!district) return 120;
-
-  // If user has not pasted API key yet, use realistic district baseline
-  if (!OPENWEATHER_API_KEY || OPENWEATHER_API_KEY === "YOUR_OPENWEATHER_API_KEY") {
-    return getTodayRainfall(district);
-  }
-
+// ─── Prophet AI Model Rainfall Forecast Helper ─────────────────────────────
+export const fetchProphetRainfall = async (district, month, year, token = '') => {
+  if (!district) return 114.0;
   try {
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(district)},LK&appid=${OPENWEATHER_API_KEY}&units=metric`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.warn(`OpenWeatherMap returned ${res.status}, using baseline fallback.`);
-      return getTodayRainfall(district);
+    const res = await fetch('/api/predictions/rainfall', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ district, month: Number(month) || 1, year: Number(year) || 2026 })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data.rainfall === 'number') {
+        return data.rainfall;
+      }
     }
-    const data = await res.json();
-
-    // OpenWeatherMap rainfall in mm — realistic daily estimate
-    const humidity = data.main?.humidity || 65;
-    const base = DISTRICT_RAINFALL[district] || 60;
-    let rainMm = 0;
-
-    if (data.rain) {
-      // rain['1h'] is intensity in mm/hr → extrapolate to daily using humidity
-      const rain1h = data.rain['1h'] || data.rain['3h'] || 0;
-      // Daily estimate: rain intensity × 24h adjusted by humidity weight
-      const dailyFromRain = rain1h * 24 * (humidity / 100);
-      // Blend with district seasonal baseline weighted by humidity
-      const baselineContrib = base * (humidity / 100) * 0.4;
-      rainMm = Math.round(dailyFromRain + baselineContrib);
-    } else if (data.weather && data.weather[0]?.main === 'Rain') {
-      // Weather says Rain but no rain object — use humidity × baseline
-      rainMm = Math.round(base * (humidity / 100) * 1.1);
-    } else {
-      // Clear/Cloudy — scale baseline by humidity factor
-      rainMm = Math.round(base * (humidity / 100));
-    }
-
-    return Math.max(15, Math.min(300, rainMm));
   } catch (err) {
-    console.error("OpenWeatherMap fetch error:", err);
-    return getTodayRainfall(district);
+    console.error("Prophet rainfall fetch error:", err);
   }
+  return 114.0;
 };
 
 // ─── Main Prediction Page ─────────────────────────────────────────────────────
@@ -860,38 +825,64 @@ const Prediction = ({ user }) => {
   const [dYear, setDYear] = useState(currentYear);
   const [dDistrict, setDDistrict] = useState('Colombo');
   const [dBloodGroup, setDBloodGroup] = useState('A+');
-  const [dRainfall, setDRainfall] = useState(() => String(getTodayRainfall('Colombo')));
+  const [dRainfall, setDRainfall] = useState('114');
   const [dFestival, setDFestival] = useState('1');
 
   const [aMonth, setAMonth] = useState(currentMonth);
   const [aYear, setAYear] = useState(currentYear);
   const [aDistrict, setADistrict] = useState('Colombo');
   const [aBloodGroup, setABloodGroup] = useState('A+');
-  const [aRainfall, setARainfall] = useState(() => String(getTodayRainfall('Colombo')));
+  const [aRainfall, setARainfall] = useState('114');
   const [aFestival, setAFestival] = useState('1');
 
   const [sMonth, setSMonth] = useState(currentMonth);
   const [sYear, setSYear] = useState(currentYear);
 
-  // Handlers to fetch live OpenWeatherMap rainfall when district changes
-  const handleDiseaseDistrictChange = async (dist) => {
-    setDDistrict(dist);
-    if (dist) {
-      setWeatherLoadingD(true);
-      const rain = await fetchOpenWeatherRainfall(dist);
-      setDRainfall(String(rain));
-      setWeatherLoadingD(false);
-    }
+  // Handlers to forecast rainfall using all_districts_prophet_models.pkl
+  const updateDiseaseRainfall = async (dist, m, y) => {
+    if (!dist) return;
+    setWeatherLoadingD(true);
+    const rain = await fetchProphetRainfall(dist, m, y, user?.token);
+    setDRainfall(String(rain));
+    setWeatherLoadingD(false);
   };
 
-  const handleAccidentDistrictChange = async (dist) => {
+  const handleDiseaseDistrictChange = (dist) => {
+    setDDistrict(dist);
+    updateDiseaseRainfall(dist, dMonth, dYear);
+  };
+
+  const handleDiseaseMonthChange = (m) => {
+    setDMonth(m);
+    updateDiseaseRainfall(dDistrict, m, dYear);
+  };
+
+  const handleDiseaseYearChange = (y) => {
+    setDYear(y);
+    updateDiseaseRainfall(dDistrict, dMonth, y);
+  };
+
+  const updateAccidentRainfall = async (dist, m, y) => {
+    if (!dist) return;
+    setWeatherLoadingA(true);
+    const rain = await fetchProphetRainfall(dist, m, y, user?.token);
+    setARainfall(String(rain));
+    setWeatherLoadingA(false);
+  };
+
+  const handleAccidentDistrictChange = (dist) => {
     setADistrict(dist);
-    if (dist) {
-      setWeatherLoadingA(true);
-      const rain = await fetchOpenWeatherRainfall(dist);
-      setARainfall(String(rain));
-      setWeatherLoadingA(false);
-    }
+    updateAccidentRainfall(dist, aMonth, aYear);
+  };
+
+  const handleAccidentMonthChange = (m) => {
+    setAMonth(m);
+    updateAccidentRainfall(aDistrict, m, aYear);
+  };
+
+  const handleAccidentYearChange = (y) => {
+    setAYear(y);
+    updateAccidentRainfall(aDistrict, aMonth, y);
   };
 
   // Chart filter
@@ -1098,12 +1089,12 @@ const Prediction = ({ user }) => {
     setLoadingShortage(false);
   }, [sMonth, sYear]);
 
-  // Fetch live weather on initial mount for default district (Colombo)
+  // Fetch initial Prophet model rainfall on mount for default district (Colombo) and current month
   useEffect(() => {
     const fetchInitialWeather = async () => {
       setWeatherLoadingD(true);
       setWeatherLoadingA(true);
-      const rain = await fetchOpenWeatherRainfall('Colombo');
+      const rain = await fetchProphetRainfall('Colombo', currentMonth, currentYear, user?.token);
       setDRainfall(String(rain));
       setARainfall(String(rain));
       setWeatherLoadingD(false);
@@ -1189,7 +1180,7 @@ const Prediction = ({ user }) => {
             </div>
           </div>
 
-          <MonthSelector month={dMonth} onMonthChange={setDMonth} year={dYear} onYearChange={setDYear} />
+          <MonthSelector month={dMonth} onMonthChange={handleDiseaseMonthChange} year={dYear} onYearChange={handleDiseaseYearChange} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
@@ -1220,13 +1211,16 @@ const Prediction = ({ user }) => {
             <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', gridColumn: '1 / -1' }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>Rainfall (mm)</span>
-                {weatherLoadingD && (
-                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                    <RefreshCw size={10} className="animate-spin" /> Fetching...
-                  </span>
-                )}
-                <span style={{ display: 'none' }}>
-                  <CloudRain size={11} /> OpenWeather API
+                <span style={{ fontSize: '0.62rem', color: '#8b5cf6', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  {weatherLoadingD ? (
+                    <>
+                      <RefreshCw size={10} className="animate-spin" /> Forecasting...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={10} /> Prophet Forecast
+                    </>
+                  )}
                 </span>
               </span>
               <input type="number" min="0" placeholder="e.g. 125" value={dRainfall} onChange={e => setDRainfall(e.target.value)}
@@ -1314,7 +1308,7 @@ const Prediction = ({ user }) => {
             </div>
           </div>
 
-          <MonthSelector month={aMonth} onMonthChange={setAMonth} year={aYear} onYearChange={setAYear} />
+          <MonthSelector month={aMonth} onMonthChange={handleAccidentMonthChange} year={aYear} onYearChange={handleAccidentYearChange} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
@@ -1345,13 +1339,16 @@ const Prediction = ({ user }) => {
             <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', gridColumn: '1 / -1' }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>Rainfall (mm)</span>
-                {weatherLoadingA && (
-                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                    <RefreshCw size={10} className="animate-spin" /> Fetching...
-                  </span>
-                )}
-                <span style={{ display: 'none' }}>
-                  <CloudRain size={11} /> OpenWeather API
+                <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  {weatherLoadingA ? (
+                    <>
+                      <RefreshCw size={10} className="animate-spin" /> Forecasting...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={10} /> Prophet Forecast
+                    </>
+                  )}
                 </span>
               </span>
               <input type="number" min="0" placeholder="e.g. 125" value={aRainfall} onChange={e => setARainfall(e.target.value)}

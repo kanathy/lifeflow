@@ -296,10 +296,45 @@ const predictAccident = async (req, res) => {
   }
 };
 
+// ---------------------------------------------------------------
+// POST /api/predictions/rainfall  →  Prophet rainfall prediction
+// ---------------------------------------------------------------
+const predictRainfall = async (req, res) => {
+  try {
+    const { district, month, monthNumber, year } = req.body;
+    const monthNum = Number(monthNumber) || Number(month) || 1;
+    const yearNum = Number(year) || new Date().getFullYear();
+
+    let result = null;
+    try {
+      result = await callML('/api/predict/rainfall', {
+        district: district || 'Colombo',
+        month: monthNum,
+        year: yearNum
+      });
+    } catch (mlErr) {
+      console.warn('ML rainfall service warning:', mlErr.message);
+      result = {
+        district: district || 'Colombo',
+        month: monthNum,
+        year: yearNum,
+        rainfall: 120.0,
+        model: 'Prophet-Fallback'
+      };
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Rainfall prediction error:', error.message);
+    res.status(500).json({ message: error.message || 'Rainfall prediction failed' });
+  }
+};
+
 module.exports = {
   getPredictions,
   recalculatePredictions,
   predictDisease,
-  predictAccident
+  predictAccident,
+  predictRainfall
 };
 
