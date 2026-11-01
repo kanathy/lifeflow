@@ -410,7 +410,6 @@ const Dashboard = ({ user }) => {
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', textAlign: 'left' }}>
                   <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Patient</th>
-                  <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Group</th>
                   <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Hospital</th>
                   <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Status</th>
                 </tr>
@@ -419,9 +418,6 @@ const Dashboard = ({ user }) => {
                 {recentRequests?.map((r) => (
                   <tr key={r._id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '8px 0', fontWeight: 500 }}>{r.patientName}</td>
-                    <td style={{ padding: '8px 0' }}>
-                      <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{r.bloodGroup}</span>
-                    </td>
                     <td style={{ padding: '8px 0', color: 'var(--text-secondary)' }}>{r.hospital}</td>
                     <td style={{ padding: '8px 0' }}>
                       <span className={`badge badge-${r.status === 'Completed' ? 'success' : r.status === 'Accepted' ? 'info' : 'warning'}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>

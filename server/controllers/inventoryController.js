@@ -34,7 +34,7 @@ const createStock = async (req, res) => {
       district,
       hospitalName: finalHospitalName,
       availableUnits: Number(availableUnits),
-      expiryDays: Number(expiryDays || 35)
+      expiryDays: Number(expiryDays || 42)
     });
     res.status(201).json(newStock);
   } catch (error) {

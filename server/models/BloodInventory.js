@@ -27,7 +27,7 @@ const BloodInventorySchema = new mongoose.Schema({
   expiryDays: {
     type: Number,
     required: true,
-    default: 35 // default shelf life
+    default: 42 // default shelf life
   },
   lastUpdated: {
     type: Date,
