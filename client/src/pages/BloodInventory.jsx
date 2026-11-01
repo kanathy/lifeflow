@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, CheckCircle2, Building2, MapPin, ChevronRight, Layers } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
+import HospitalNameAutocomplete from '../components/HospitalNameAutocomplete';
 
 // ── Group raw records by (hospitalName + bloodGroup) ──────────────────────────
 const groupInventory = (records) => {
@@ -413,7 +414,7 @@ const BloodInventory = ({ user }) => {
                   {detailGroup.hospitalName} &nbsp;·&nbsp; {detailGroup.district} District
                 </p>
               </div>
-              {isMyHospitalItem(detailGroup.records[0]) && (
+              {detailGroup.records && detailGroup.records.length > 0 && isMyHospitalItem(detailGroup) && (
                 <button
                   className="btn btn-primary"
                   style={{ fontSize: '0.75rem', padding: '7px 13px' }}
@@ -547,7 +548,28 @@ const BloodInventory = ({ user }) => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label>Hospital Facility Name</label>
-                    <input type="text" value={form.hospitalName || ''} onChange={e => setForm({ ...form, hospitalName: e.target.value })} className="form-control" placeholder="e.g. National Hospital of Sri Lanka" required />
+                    <HospitalNameAutocomplete
+                      value={form.hospitalName || ''}
+                      onChange={value => setForm(prev => ({ ...prev, hospitalName: value }))}
+                      onSelect={selectedName => {
+                        const match = inventory.find(i => i.hospitalName === selectedName);
+                        if (match && match.district) {
+                          setForm(prev => ({ ...prev, hospitalName: selectedName, district: match.district }));
+                        } else {
+                          setForm(prev => ({ ...prev, hospitalName: selectedName }));
+                        }
+                      }}
+                      suggestions={Array.from(new Set([
+                        ...inventory.map(i => i.hospitalName).filter(Boolean),
+                        'National Hospital of Sri Lanka',
+                        'Colombo General Hospital',
+                        'Jaffna Teaching Hospital',
+                        'Kandy General Hospital',
+                        'Galle General Hospital'
+                      ]))}
+                      placeholder="e.g. National Hospital of Sri Lanka"
+                      required
+                    />
                   </div>
                   <div className="form-group">
                     <label>District Location</label>
