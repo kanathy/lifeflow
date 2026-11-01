@@ -2,24 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SriLankaMap from '../components/SriLankaMap';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
-import { 
-  ShieldAlert, 
-  CheckCircle, 
-  AlertTriangle, 
-  ArrowRight, 
-  ShieldCheck, 
-  Search, 
-  X, 
-  Mail, 
-  Truck, 
-  Building2, 
-  Sparkles, 
-  Clock, 
-  Send, 
-  Check, 
-  CheckCircle2, 
-  Phone, 
-  ExternalLink 
+import {
+  ShieldAlert,
+  CheckCircle,
+  AlertTriangle,
+  ArrowRight,
+  ShieldCheck,
+  Search,
+  X,
+  Mail,
+  Truck,
+  Building2,
+  Sparkles,
+  Clock,
+  Send,
+  Check,
+  CheckCircle2,
+  Phone,
+  ExternalLink
 } from 'lucide-react';
 
 const DEFAULT_HOSPITALS = [
@@ -115,86 +115,82 @@ const DistrictMonitoring = ({ user }) => {
     return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading monitoring records...</div>;
   }
 
-  const { districtAvailability: rawAvailability, bloodGroupStock } = data || {};
+  const ALL_25_DISTRICTS = [
+    'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
+    'Galle', 'Matara', 'Hambantota', 'Jaffna', 'Kilinochchi', 'Mannar',
+    'Vavuniya', 'Mullaitivu', 'Batticaloa', 'Ampara', 'Trincomalee',
+    'Kurunegala', 'Puttalam', 'Anuradhapura', 'Polonnaruwa', 'Badulla',
+    'Moneragala', 'Ratnapura', 'Kegalle'
+  ];
 
-  // Aggregate real inventory grouped by district directly from BloodInventory
-  const inventoryByDistrict = {};
+  // Aggregate ONLY real inventory from BloodInventory
+  const districtAvailability = {};
+  ALL_25_DISTRICTS.forEach(d => {
+    districtAvailability[d] = {
+      totalUnits: 0,
+      status: 'Critical',
+      bloodGroups: { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 }
+    };
+  });
+
   if (Array.isArray(inventoryList)) {
     inventoryList.forEach(item => {
       const dist = item.district;
       if (!dist) return;
-      if (!inventoryByDistrict[dist]) {
-        inventoryByDistrict[dist] = {
+
+      const trimmed = dist.trim();
+      const matchedKey = ALL_25_DISTRICTS.find(d => d.toLowerCase() === trimmed.toLowerCase()) ||
+        (trimmed.toLowerCase() === 'monaragala' ? 'Moneragala' : trimmed);
+
+      if (!districtAvailability[matchedKey]) {
+        districtAvailability[matchedKey] = {
           totalUnits: 0,
+          status: 'Critical',
           bloodGroups: { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 }
         };
       }
+
       const units = Number(item.availableUnits) || 0;
-      inventoryByDistrict[dist].totalUnits += units;
-      if (item.bloodGroup && inventoryByDistrict[dist].bloodGroups[item.bloodGroup] !== undefined) {
-        inventoryByDistrict[dist].bloodGroups[item.bloodGroup] += units;
+      districtAvailability[matchedKey].totalUnits += units;
+      if (item.bloodGroup && districtAvailability[matchedKey].bloodGroups[item.bloodGroup] !== undefined) {
+        districtAvailability[matchedKey].bloodGroups[item.bloodGroup] += units;
       }
     });
   }
 
-  // Merge: if a district has real records in BloodInventory, use them!
-  const districtAvailability = { ...(rawAvailability || {}) };
-  Object.keys(inventoryByDistrict).forEach(dist => {
-    const real = inventoryByDistrict[dist];
-    if (real.totalUnits > 0) {
-      districtAvailability[dist] = {
-        totalUnits: real.totalUnits,
-        status: real.totalUnits > 300 ? 'Good' : real.totalUnits >= 100 ? 'Low' : 'Critical',
-        bloodGroups: real.bloodGroups
-      };
-    }
+  // Set status purely based on actual units in BloodInventory: Good (>300), Low (100-300), Critical (<100)
+  Object.keys(districtAvailability).forEach(dist => {
+    const units = districtAvailability[dist].totalUnits;
+    districtAvailability[dist].status = units > 300 ? 'Good' : units >= 100 ? 'Low' : 'Critical';
   });
 
-  const calculateBloodGroups = (totalUnits = 0) => {
-    const u = Number(totalUnits) || 0;
-    if (u <= 0) return { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 };
-    const oPlus = Math.round(u * 0.36);
-    const aPlus = Math.round(u * 0.24);
-    const bPlus = Math.round(u * 0.22);
-    const abPlus = Math.round(u * 0.08);
-    const oMinus = Math.round(u * 0.04);
-    const aMinus = Math.round(u * 0.03);
-    const bMinus = Math.round(u * 0.02);
-    const remainder = u - (oPlus + aPlus + bPlus + abPlus + oMinus + aMinus + bMinus);
-    const abMinus = Math.max(0, remainder);
-    return {
-      'A+': aPlus,
-      'A-': aMinus,
-      'B+': bPlus,
-      'B-': bMinus,
-      'O+': oPlus,
-      'O-': oMinus,
-      'AB+': abPlus,
-      'AB-': abMinus
-    };
-  };
+  const EMPTY_BLOOD_GROUPS = { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 };
 
   // Formulate a detailed list of all districts
   const districts = Object.keys(districtAvailability || {}).map(name => {
-    const details = districtAvailability[name];
+    const details = districtAvailability[name] || {};
+    const totalUnits = Number(details.totalUnits) || 0;
     let shortageRisk = 'Low';
     let riskPercent = 20;
-    if (details.status === 'Critical') {
+    if (details.status === 'Critical' || totalUnits < 100) {
       shortageRisk = 'High';
       riskPercent = 85;
-    } else if (details.status === 'Low') {
+    } else if (details.status === 'Low' || totalUnits <= 300) {
       shortageRisk = 'Medium';
       riskPercent = 55;
     }
 
-    const bloodGroups = details.bloodGroups && Object.keys(details.bloodGroups).length >= 8
-      ? details.bloodGroups
-      : calculateBloodGroups(details.totalUnits);
+    const bloodGroups = details.bloodGroups || EMPTY_BLOOD_GROUPS;
+
+    // Match official hospital for this district
+    const hosp = hospitalsList.find(h => h.district && h.district.toLowerCase() === name.toLowerCase());
+    const hospitalName = hosp?.name || `${name} District General Hospital`;
 
     return {
       name,
-      totalUnits: details.totalUnits,
-      status: details.status,
+      hospitalName,
+      totalUnits,
+      status: details.status || (totalUnits > 300 ? 'Good' : totalUnits >= 100 ? 'Low' : 'Critical'),
       shortageRisk,
       riskPercent,
       bloodGroups
@@ -219,7 +215,7 @@ const DistrictMonitoring = ({ user }) => {
   // Calculate which hospitals belong to surplus districts and rank them
   const rankedDonorHospitals = hospitalsList
     .map(h => {
-      const distData = districtAvailability?.[h.district] || { totalUnits: 150, status: 'Low' };
+      const distData = districtAvailability?.[h.district] || { totalUnits: 0, status: 'Critical' };
       return {
         ...h,
         availableUnits: distData.totalUnits,
@@ -376,7 +372,7 @@ const DistrictMonitoring = ({ user }) => {
   };
 
   // Active Dispatches relating to the selected district
-  const relatedDispatches = requestsList.filter(r => 
+  const relatedDispatches = requestsList.filter(r =>
     r.district === selectedDistrict || (r.patientName && r.patientName.includes(selectedDistrict))
   );
 
@@ -415,9 +411,9 @@ const DistrictMonitoring = ({ user }) => {
         <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '20px', width: '100%' }}>Interactive Regional Status</h3>
           <div style={{ width: '100%', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <SriLankaMap 
-              availability={districtAvailability} 
-              onDistrictSelect={(dist) => setSelectedDistrict(dist)} 
+            <SriLankaMap
+              availability={districtAvailability}
+              onDistrictSelect={(dist) => setSelectedDistrict(dist)}
               selectedDistrict={selectedDistrict}
             />
           </div>
@@ -473,7 +469,7 @@ const DistrictMonitoring = ({ user }) => {
                     const count = selectedDetails.bloodGroups?.[bg] ?? 0;
                     const isCritical = count < 10;
                     return (
-                      <div 
+                      <div
                         key={bg}
                         style={{
                           backgroundColor: 'var(--bg-secondary)',
@@ -532,17 +528,17 @@ const DistrictMonitoring = ({ user }) => {
                       Supply is below 100 units ({selectedDetails.totalUnits} units). Request emergency transfer from surplus hospital.
                     </p>
                   </div>
-                  <button 
-                    onClick={handleOpenDispatchModal} 
-                    className="btn btn-danger" 
-                    style={{ 
-                      padding: '8px 16px', 
-                      fontSize: '0.8rem', 
-                      fontWeight: 700, 
-                      display: 'flex', 
-                      alignItems: 'center', 
+                  <button
+                    onClick={handleOpenDispatchModal}
+                    className="btn btn-danger"
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
                       gap: '6px',
-                      cursor: 'pointer' 
+                      cursor: 'pointer'
                     }}
                   >
                     <Truck size={15} />
@@ -563,7 +559,7 @@ const DistrictMonitoring = ({ user }) => {
                     Active Inter-District Dispatch Requests ({relatedDispatches.length})
                   </h4>
                 </div>
-                <button 
+                <button
                   onClick={() => navigate('/requests')}
                   style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
                 >
@@ -574,7 +570,7 @@ const DistrictMonitoring = ({ user }) => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {relatedDispatches.slice(0, 3).map(reqItem => (
-                  <div 
+                  <div
                     key={reqItem._id}
                     style={{
                       display: 'flex',
@@ -643,8 +639,8 @@ const DistrictMonitoring = ({ user }) => {
 
           {/* District Status List */}
           <div className="dashboard-card" style={{ padding: '0px', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ 
-              padding: '14px 20px', 
+            <div style={{
+              padding: '14px 20px',
               borderBottom: '1px solid var(--border-color)',
               display: 'flex',
               alignItems: 'center',
@@ -676,30 +672,31 @@ const DistrictMonitoring = ({ user }) => {
               </div>
             </div>
 
-            <div 
+            <div
               tabIndex={0}
-              style={{ 
-                overflowX: 'auto', 
-                overflowY: 'auto', 
-                maxHeight: '260px', 
-                flex: 1, 
+              style={{
+                overflowX: 'auto',
+                overflowY: 'auto',
+                maxHeight: '260px',
+                flex: 1,
                 outline: 'none',
                 scrollbarWidth: 'thin'
               }}
             >
               <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
                 <thead>
-                  <tr style={{ 
-                    position: 'sticky', 
-                    top: 0, 
-                    backgroundColor: 'var(--bg-primary)', 
-                    borderBottom: '1px solid var(--border-color)', 
-                    color: 'var(--text-secondary)', 
-                    fontSize: '0.74rem', 
+                  <tr style={{
+                    position: 'sticky',
+                    top: 0,
+                    backgroundColor: 'var(--bg-primary)',
+                    borderBottom: '1px solid var(--border-color)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.74rem',
                     textAlign: 'left',
-                    zIndex: 2 
+                    zIndex: 2
                   }}>
                     <th style={{ padding: '10px 14px', minWidth: '110px' }}>District</th>
+                    <th style={{ padding: '10px 14px', minWidth: '180px' }}>Coordinating Hospital</th>
                     <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>A+</th>
                     <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>A-</th>
                     <th style={{ padding: '10px 6px', textAlign: 'center', color: '#e11d48' }}>B+</th>
@@ -716,10 +713,10 @@ const DistrictMonitoring = ({ user }) => {
                 <tbody>
                   {filteredDistricts.length === 0 ? (
                     <tr>
-                      <td colSpan={12} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      <td colSpan={13} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                         No districts found matching "{searchTerm}".
-                        <button 
-                          onClick={() => setSearchTerm('')} 
+                        <button
+                          onClick={() => setSearchTerm('')}
                           style={{ background: 'none', border: 'none', color: '#e11d48', fontWeight: 700, cursor: 'pointer', marginLeft: '8px' }}
                         >
                           Clear search
@@ -740,6 +737,9 @@ const DistrictMonitoring = ({ user }) => {
                       >
                         <td style={{ padding: '10px 14px', fontWeight: 700, color: selectedDistrict === d.name ? '#e11d48' : 'inherit' }}>
                           {d.name}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          {d.hospitalName}
                         </td>
                         <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['A+'] ?? 0}</td>
                         <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem' }}>{d.bloodGroups?.['A-'] ?? 0}</td>

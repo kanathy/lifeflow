@@ -59,36 +59,53 @@ const Dashboard = ({ user }) => {
 
   const { cards, bloodGroupStock, districtAvailability: rawAvailability, predictions, monthlyOverview, recentRequests, recentDonations } = stats || {};
 
-  // Aggregate real inventory grouped by district directly from BloodInventory
-  const inventoryByDistrict = {};
+  const ALL_25_DISTRICTS = [
+    'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
+    'Galle', 'Matara', 'Hambantota', 'Jaffna', 'Kilinochchi', 'Mannar',
+    'Vavuniya', 'Mullaitivu', 'Batticaloa', 'Ampara', 'Trincomalee',
+    'Kurunegala', 'Puttalam', 'Anuradhapura', 'Polonnaruwa', 'Badulla',
+    'Moneragala', 'Ratnapura', 'Kegalle'
+  ];
+
+  // Aggregate ONLY real inventory from BloodInventory
+  const districtAvailability = {};
+  ALL_25_DISTRICTS.forEach(d => {
+    districtAvailability[d] = {
+      totalUnits: 0,
+      status: 'Critical',
+      bloodGroups: { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 }
+    };
+  });
+
   if (Array.isArray(inventoryList)) {
     inventoryList.forEach(item => {
       const dist = item.district;
       if (!dist) return;
-      if (!inventoryByDistrict[dist]) {
-        inventoryByDistrict[dist] = {
+
+      const trimmed = dist.trim();
+      const matchedKey = ALL_25_DISTRICTS.find(d => d.toLowerCase() === trimmed.toLowerCase()) ||
+        (trimmed.toLowerCase() === 'monaragala' ? 'Moneragala' : trimmed);
+
+      if (!districtAvailability[matchedKey]) {
+        districtAvailability[matchedKey] = {
           totalUnits: 0,
+          status: 'Critical',
           bloodGroups: { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 }
         };
       }
+
       const units = Number(item.availableUnits) || 0;
-      inventoryByDistrict[dist].totalUnits += units;
-      if (item.bloodGroup && inventoryByDistrict[dist].bloodGroups[item.bloodGroup] !== undefined) {
-        inventoryByDistrict[dist].bloodGroups[item.bloodGroup] += units;
+      districtAvailability[matchedKey].totalUnits += units;
+      if (item.bloodGroup && districtAvailability[matchedKey].bloodGroups[item.bloodGroup] !== undefined) {
+        districtAvailability[matchedKey].bloodGroups[item.bloodGroup] += units;
       }
     });
   }
 
-  const districtAvailability = { ...(rawAvailability || {}) };
-  Object.keys(inventoryByDistrict).forEach(dist => {
-    const real = inventoryByDistrict[dist];
-    if (real.totalUnits > 0) {
-      districtAvailability[dist] = {
-        totalUnits: real.totalUnits,
-        status: real.totalUnits > 300 ? 'Good' : real.totalUnits >= 100 ? 'Low' : 'Critical',
-        bloodGroups: real.bloodGroups
-      };
-    }
+  // Set status purely based on actual units in BloodInventory: Good (>300), Low (100-300), Critical (<100)
+  Object.keys(districtAvailability).forEach(dist => {
+    const units = districtAvailability[dist].totalUnits;
+    districtAvailability[dist].status = units > 300 ? 'Good' : units >= 100 ? 'Low' : 'Critical';
   });
 
   // Custom SVG Line Chart coordinates helper
@@ -368,7 +385,7 @@ const Dashboard = ({ user }) => {
                 const y = lineChartHeight - paddingY - (val * (lineChartHeight - paddingY * 2)) / 2500;
                 return (
                   <text key={val} x={paddingX - 8} y={y + 3} fill="var(--text-secondary)" fontSize="8px" fontWeight="600" textAnchor="end">
-                    {val >= 1000 ? `${val/1000}K` : val}
+                    {val >= 1000 ? `${val / 1000}K` : val}
                   </text>
                 );
               })}

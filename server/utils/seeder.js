@@ -52,11 +52,11 @@ const seedData = {
     { bloodGroup: 'AB-', rhFactor: 'negative', district: 'Trincomalee', availableUnits: 25, expiryDays: 3 }
   ],
   requests: [
-    { requestId: 'REQ001', patientName: 'Nimal Perera', bloodGroup: 'A+', hospital: 'Colombo General', district: 'Colombo', status: 'Pending', requestedAt: new Date(Date.now() - 10 * 60 * 1000) },
-    { requestId: 'REQ002', patientName: 'Shanika Silva', bloodGroup: 'O-', hospital: 'Kandy Hospital', district: 'Kandy', status: 'Accepted', requestedAt: new Date(Date.now() - 25 * 60 * 1000) },
-    { requestId: 'REQ003', patientName: 'Tharindu Fernando', bloodGroup: 'B+', hospital: 'Jaffna Teaching', district: 'Jaffna', status: 'Pending', requestedAt: new Date(Date.now() - 60 * 60 * 1000) },
-    { requestId: 'REQ004', patientName: 'Saman Kumara', bloodGroup: 'AB+', hospital: 'Galle Hospital', district: 'Galle', status: 'Completed', requestedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-    { requestId: 'REQ005', patientName: 'Lakshi Dissanayake', bloodGroup: 'O+', hospital: 'Batticaloa Hosp.', district: 'Batticaloa', status: 'Accepted', requestedAt: new Date(Date.now() - 3 * 60 * 60 * 1000) }
+    { requestId: 'REQ001', patientName: 'Nimal Perera', bloodGroup: 'A+', units: 2, requesterHospital: 'Colombo South Teaching Hospital', hospital: 'Colombo General', district: 'Colombo', status: 'Pending', requestedAt: new Date(Date.now() - 10 * 60 * 1000) },
+    { requestId: 'REQ002', patientName: 'Shanika Silva', bloodGroup: 'O-', units: 1, requesterHospital: 'Peradeniya Teaching Hospital', hospital: 'Kandy Hospital', district: 'Kandy', status: 'Accepted', requestedAt: new Date(Date.now() - 25 * 60 * 1000) },
+    { requestId: 'REQ003', patientName: 'Tharindu Fernando (ICU Surgery)', bloodGroup: 'B+', units: 3, requesterHospital: 'Trincomalee General Hospital', hospital: 'Jaffna Teaching', district: 'Jaffna', status: 'Pending', requestedAt: new Date(Date.now() - 60 * 60 * 1000) },
+    { requestId: 'REQ004', patientName: 'Saman Kumara', bloodGroup: 'AB+', units: 1, requesterHospital: 'Matara District General Hospital', hospital: 'Galle Hospital', district: 'Galle', status: 'Completed', requestedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+    { requestId: 'REQ005', patientName: 'Lakshi Dissanayake', bloodGroup: 'O+', units: 2, requesterHospital: 'Ampara General Hospital', hospital: 'Batticaloa Hosp.', district: 'Batticaloa', status: 'Accepted', requestedAt: new Date(Date.now() - 3 * 60 * 60 * 1000) }
   ],
   notifications: [
     { message: 'Blood shortage predicted in Colombo district', type: 'Alert', dateTime: new Date('2025-05-31T10:25:00'), status: 'Unread' },

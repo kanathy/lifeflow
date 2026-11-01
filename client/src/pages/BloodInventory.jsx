@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit2, Trash2, X, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, SlidersHorizontal, CheckCircle2, Building2, MapPin } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
@@ -41,7 +41,7 @@ const BloodInventory = ({ user }) => {
   const fetchInventory = () => {
     setLoading(true);
     fetch('/api/inventory', {
-      headers: { Authorization: `Bearer ${user.token}` }
+      headers: { Authorization: `Bearer ${user?.token || ''}` }
     })
       .then(res => res.json())
       .then(data => {
@@ -68,7 +68,8 @@ const BloodInventory = ({ user }) => {
     if (searchTerm) {
       result = result.filter(item =>
         item.district.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.bloodGroup.toLowerCase().includes(searchTerm.toLowerCase())
+        item.bloodGroup.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.hospitalName && item.hospitalName.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -87,19 +88,41 @@ const BloodInventory = ({ user }) => {
     setFilteredInventory(result);
   }, [searchTerm, filterDistrict, filterGroup, filterRh, inventory]);
 
+  const isAdmin = user?.role === 'Administrator';
+  const isHospitalUser = user?.role === 'Hospital' || user?.role === 'Hospital Staff' || !!user?.hospitalId;
+  const userHospitalName = (user?.hospitalName || user?.name || '').trim();
+
+  const isMyHospitalItem = (item) => {
+    if (isAdmin) return true;
+    if (!isHospitalUser || !userHospitalName) return false;
+    const itemHosp = (item?.hospitalName || item?.hospital || '').trim().toLowerCase();
+    const myHosp = userHospitalName.toLowerCase();
+    return itemHosp === myHosp || (itemHosp && (itemHosp.includes(myHosp) || myHosp.includes(itemHosp)));
+  };
+
+  const userDistrict = user?.hospitalDistrict ||
+    (isHospitalUser ? inventory.find(i => isMyHospitalItem(i))?.district : null) ||
+    (userHospitalName.toLowerCase().includes('jaffna') ? 'Jaffna' : 'Colombo');
+
   const handleOpenAdd = () => {
     setEditMode(false);
     setForm({
       bloodGroup: 'A+',
       rhFactor: 'positive',
-      district: 'Colombo',
+      district: isHospitalUser ? userDistrict : 'Colombo',
       availableUnits: '',
-      expiryDays: '35'
+      expiryDays: '35',
+      hospitalName: isHospitalUser ? userHospitalName : ''
     });
     setModalOpen(true);
   };
 
   const handleOpenEdit = (item) => {
+    if (!isMyHospitalItem(item)) {
+      setSuccessMessage('You are only authorized to edit stock for your own hospital.');
+      setTimeout(() => setSuccessMessage(''), 3500);
+      return;
+    }
     setEditMode(true);
     setSelectedId(item._id);
     setForm({
@@ -107,7 +130,8 @@ const BloodInventory = ({ user }) => {
       rhFactor: item.rhFactor,
       district: item.district,
       availableUnits: item.availableUnits,
-      expiryDays: item.expiryDays
+      expiryDays: item.expiryDays,
+      hospitalName: item.hospitalName || userHospitalName
     });
     setModalOpen(true);
   };
@@ -117,13 +141,19 @@ const BloodInventory = ({ user }) => {
     const endpoint = editMode ? `/api/inventory/${selectedId}` : '/api/inventory';
     const method = editMode ? 'PUT' : 'POST';
 
+    const payload = {
+      ...form,
+      hospitalName: isHospitalUser ? userHospitalName : (form.hospitalName || ''),
+      district: isHospitalUser ? userDistrict : form.district
+    };
+
     fetch(endpoint, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${user.token}`
+        Authorization: `Bearer ${user?.token || ''}`
       },
-      body: JSON.stringify(form)
+      body: JSON.stringify(payload)
     })
       .then(res => res.json())
       .then(() => {
@@ -149,7 +179,7 @@ const BloodInventory = ({ user }) => {
     setDeleting(true);
     fetch(`/api/inventory/${itemToDelete._id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${user.token}` }
+      headers: { Authorization: `Bearer ${user?.token || ''}` }
     })
       .then(() => {
         setDeleting(false);
@@ -165,6 +195,8 @@ const BloodInventory = ({ user }) => {
       });
   };
 
+
+
   const totalUnits = filteredInventory.reduce((acc, curr) => acc + curr.availableUnits, 0);
 
   return (
@@ -172,7 +204,7 @@ const BloodInventory = ({ user }) => {
       <div className="flex-between">
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Outfit' }}>Blood Inventory</h1>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Track and manage active blood units in stock</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Track and manage active blood units in stock across all Sri Lanka districts</p>
         </div>
         <button className="btn btn-primary" onClick={handleOpenAdd}>
           <Plus size={16} />
@@ -231,6 +263,26 @@ const BloodInventory = ({ user }) => {
         </div>
       )}
 
+      {/* Hospital Portal Notification Banner */}
+      {isHospitalUser && !isAdmin && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
+          border: '1px solid rgba(37, 99, 235, 0.25)',
+          borderRadius: '10px',
+          padding: '12px 16px',
+          fontSize: '0.82rem',
+          color: '#1e40af'
+        }}>
+          <Building2 size={20} color="#2563eb" />
+          <div style={{ flex: 1 }}>
+            <strong>Hospital Portal Active ({userHospitalName})</strong>: You are viewing national stock records in read-only mode. You are authorized to edit and update blood stock for <strong>{userHospitalName}</strong> only.
+          </div>
+        </div>
+      )}
+
       {/* Search and Filters panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '12px' }} className="flex-column-responsive">
@@ -238,9 +290,9 @@ const BloodInventory = ({ user }) => {
             <SearchWithSuggestions
               value={searchTerm}
               onChange={setSearchTerm}
-              placeholder="Search by District or Blood Group..."
+              placeholder="Search by District, Hospital or Blood Group..."
               suggestions={Array.from(new Set(
-                inventory.flatMap(i => [i.district, i.bloodGroup, i.batchCode, i.location]).filter(Boolean)
+                inventory.flatMap(i => [i.district, i.hospitalName, i.bloodGroup]).filter(Boolean)
               )).map(val => ({ label: String(val), category: 'Stock' }))}
             />
           </div>
@@ -303,15 +355,18 @@ const BloodInventory = ({ user }) => {
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading inventory details...</div>
         ) : filteredInventory.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>No inventory stock records match the selected filters.</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            No inventory stock records match the selected filters.
+          </div>
         ) : (
-          <div className="table-container" style={{ margin: 0, border: 'none' }}>
-            <table className="custom-table">
+          <div className="table-container hospital-table-scroll" style={{ margin: 0, border: 'none', overflowX: 'auto' }}>
+            <table className="custom-table" style={{ width: '100%', minWidth: '1000px', tableLayout: 'auto' }}>
               <thead>
                 <tr>
                   <th>Blood Group</th>
                   <th>Rh Factor</th>
                   <th>District Location</th>
+                  <th>Hospital</th>
                   <th>Available Units</th>
                   <th>Expiry Days Remaining</th>
                   <th>Last Updated</th>
@@ -330,6 +385,9 @@ const BloodInventory = ({ user }) => {
                       </span>
                     </td>
                     <td style={{ fontWeight: 600 }}>{item.district}</td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      {item.hospitalName || `${item.district} District General Hospital`}
+                    </td>
                     <td style={{ fontWeight: 800 }}>{item.availableUnits} Units</td>
                     <td>
                       <span className={`badge badge-${item.expiryDays <= 5 ? 'danger' : item.expiryDays <= 10 ? 'warning' : 'success'}`}>
@@ -339,32 +397,42 @@ const BloodInventory = ({ user }) => {
                     <td style={{ color: 'var(--text-secondary)' }}>
                       {new Date(item.lastUpdated).toLocaleDateString('en-GB')}
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={() => handleOpenEdit(item)}
-                          style={{
-                            padding: '6px',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--text-sidebar)'
-                          }}
-                        >
-                          <Edit2 size={12} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item)}
-                          style={{
-                            padding: '6px',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--color-danger)',
-                            backgroundColor: 'var(--color-danger-light)'
-                          }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                    <td style={{ textAlign: 'center' }}>
+                      {isMyHospitalItem(item) ? (
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button
+                            onClick={() => handleOpenEdit(item)}
+                            style={{
+                              padding: '6px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: 'var(--text-sidebar)',
+                              cursor: 'pointer'
+                            }}
+                            title={`Edit ${userHospitalName} stock`}
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item)}
+                            style={{
+                              padding: '6px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: 'var(--color-danger)',
+                              backgroundColor: 'var(--color-danger-light)',
+                              cursor: 'pointer'
+                            }}
+                            title={`Delete ${userHospitalName} stock`}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                          View only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -407,6 +475,57 @@ const BloodInventory = ({ user }) => {
             </h2>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Show Hospital & Location Facility info */}
+              {isHospitalUser && !isAdmin ? (
+                <div style={{
+                  background: 'rgba(225, 29, 72, 0.05)',
+                  border: '1px solid rgba(225, 29, 72, 0.18)',
+                  padding: '12px 14px',
+                  borderRadius: '10px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-light)', letterSpacing: '0.05em' }}>
+                      Hospital Facility
+                    </span>
+                    <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
+                      Your Hospital
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--primary)', fontSize: '1rem', marginBottom: '4px' }}>
+                    <Building2 size={18} />
+                    <span>{userHospitalName}</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={13} />
+                    <span>District: <strong style={{ color: 'var(--text-main)' }}>{userDistrict}</strong> (Assigned Facility Location)</span>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label>Hospital Facility Name</label>
+                    <input
+                      type="text"
+                      value={form.hospitalName || ''}
+                      onChange={(e) => setForm({ ...form, hospitalName: e.target.value })}
+                      className="form-control"
+                      placeholder="e.g. National Hospital of Sri Lanka"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>District Location</label>
+                    <select
+                      value={form.district}
+                      onChange={(e) => setForm({ ...form, district: e.target.value })}
+                      className="form-control"
+                    >
+                      {districtsList.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
                   <label>Blood Group</label>
@@ -430,17 +549,6 @@ const BloodInventory = ({ user }) => {
                     <option value="negative">negative (-)</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label>District Location</label>
-                <select
-                  value={form.district}
-                  onChange={(e) => setForm({ ...form, district: e.target.value })}
-                  className="form-control"
-                >
-                  {districtsList.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

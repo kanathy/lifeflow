@@ -15,6 +15,18 @@ const connectDB = async () => {
       console.warn('Auto seed hospitals warning:', seedErr.message);
     }
 
+    // Auto-seed blood inventory for all 25 districts if empty
+    try {
+      const BloodInventory = require('../models/BloodInventory');
+      const invCount = await BloodInventory.countDocuments();
+      if (invCount === 0) {
+        const { seedAllDistrictsInventory } = require('../seedBloodInventory');
+        await seedAllDistrictsInventory(false);
+      }
+    } catch (invErr) {
+      console.warn('Auto seed inventory warning:', invErr.message);
+    }
+
     return conn;
   } catch (error) {
     console.error(`\x1b[31m%s\x1b[0m`, `❌ MongoDB Connection Error: ${error.message}`);

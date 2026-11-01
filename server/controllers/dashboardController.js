@@ -17,7 +17,7 @@ const getDashboardStats = async (req, res) => {
     const activeDonors = donors.filter(d => d.status === 'Active').length;
     const registeredHospitals = hospitals.length;
     const emergencyRequests = requests.filter(r => r.status === 'Pending' || r.status === 'Accepted').length;
-    
+
     // Expiring soon: inventory items where expiryDays <= 7
     const expiringSoonUnits = stock
       .filter(item => item.expiryDays <= 7)
@@ -50,7 +50,7 @@ const getDashboardStats = async (req, res) => {
       'Kurunegala', 'Puttalam', 'Anuradhapura', 'Polonnaruwa', 'Badulla',
       'Moneragala', 'Ratnapura', 'Kegalle'
     ];
-    
+
     defaultDistricts.forEach(d => {
       districtAvailability[d] = {
         totalUnits: 0,
@@ -87,58 +87,7 @@ const getDashboardStats = async (req, res) => {
       }
     });
 
-    // Baseline fallback figures ONLY for districts that don't have records in the database yet
-    const baselineDistricts = {
-      'Anuradhapura': 410,
-      'Trincomalee': 180,
-      'Kandy': 80,
-      'Batticaloa': 120,
-      'Galle': 380,
-      'Hambantota': 150,
-      'Gampaha': 210,
-      'Jaffna': 340,
-      'Kurunegala': 320,
-      'Badulla': 290,
-      'Ratnapura': 310,
-      'Kalutara': 160,
-      'Matale': 140,
-      'Nuwara Eliya': 90,
-      'Matara': 220,
-      'Kilinochchi': 110,
-      'Mannar': 85,
-      'Vavuniya': 130,
-      'Mullaitivu': 95,
-      'Ampara': 280,
-      'Puttalam': 140,
-      'Polonnaruwa': 175,
-      'Moneragala': 115,
-      'Kegalle': 190
-    };
-
-    // Function to calculate exact blood group counts for a given total
-    const getBreakdown = (total) => {
-      const u = Number(total) || 0;
-      if (u <= 0) return { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 };
-      const oPlus = Math.round(u * 0.36);
-      const aPlus = Math.round(u * 0.24);
-      const bPlus = Math.round(u * 0.22);
-      const abPlus = Math.round(u * 0.08);
-      const oMinus = Math.round(u * 0.04);
-      const aMinus = Math.round(u * 0.03);
-      const bMinus = Math.round(u * 0.02);
-      const remainder = u - (oPlus + aPlus + bPlus + abPlus + oMinus + aMinus + bMinus);
-      const abMinus = Math.max(0, remainder);
-      return { 'A+': aPlus, 'A-': aMinus, 'B+': bPlus, 'B-': bMinus, 'O+': oPlus, 'O-': oMinus, 'AB+': abPlus, 'AB-': abMinus };
-    };
-
     Object.keys(districtAvailability).forEach(dist => {
-      // If the district has NO real stock records in database, apply baseline
-      if (!districtAvailability[dist].hasRealStock && baselineDistricts[dist]) {
-        const baseTotal = baselineDistricts[dist];
-        districtAvailability[dist].totalUnits = baseTotal;
-        districtAvailability[dist].bloodGroups = getBreakdown(baseTotal);
-      }
-
       const units = districtAvailability[dist].totalUnits;
       if (units > 300) {
         districtAvailability[dist].status = 'Good';
@@ -147,7 +96,6 @@ const getDashboardStats = async (req, res) => {
       } else {
         districtAvailability[dist].status = 'Critical';
       }
-      
       delete districtAvailability[dist].hasRealStock;
     });
 

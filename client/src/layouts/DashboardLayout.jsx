@@ -134,7 +134,7 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
   });
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
@@ -401,7 +401,10 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
           display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',
-          backgroundColor: 'var(--bg-primary)'
+          backgroundColor: 'var(--bg-primary)',
+          minWidth: 0,
+          maxWidth: '100%',
+          overflowX: 'hidden'
         }}
         className="main-panel-responsive"
       >
@@ -414,10 +417,13 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
             padding: '0 24px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'between',
+            justifyContent: 'space-between',
             position: 'sticky',
             top: 0,
-            zIndex: 90
+            zIndex: 90,
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box'
           }}
           className="flex-between"
         >
@@ -607,7 +613,7 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
         </header>
 
         {/* Content Pane */}
-        <main style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
+        <main style={{ flex: 1, padding: '24px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
           {children}
         </main>
 
@@ -619,10 +625,13 @@ const DashboardLayout = ({ children, theme, toggleTheme, user, logout }) => {
             borderTop: '1px solid var(--border-color)',
             padding: '0 24px',
             display: 'flex',
-            justifyContent: 'between',
+            justifyContent: 'space-between',
             alignItems: 'center',
             fontSize: '0.75rem',
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box'
           }}
           className="flex-between"
         >

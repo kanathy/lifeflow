@@ -15,6 +15,10 @@ const BloodInventorySchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  hospitalName: {
+    type: String,
+    default: ''
+  },
   availableUnits: {
     type: Number,
     required: true,

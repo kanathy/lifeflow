@@ -1,11 +1,34 @@
 const dbResolver = require('../utils/dbResolver');
 
-// @desc    Get all requests
+// @desc    Get all requests (Admin gets all, Hospital gets ONLY requests directed to their hospital)
 // @route   GET /api/requests
 // @access  Private
 const getRequests = async (req, res) => {
   try {
-    const requests = await dbResolver.find('EmergencyRequest');
+    let requests = await dbResolver.find('EmergencyRequest');
+
+    const user = req.user;
+    const isAdmin = user && user.role === 'Administrator';
+    const isHospitalUser = user && (user.role === 'Hospital' || user.role === 'Hospital Staff' || !!user.hospitalId);
+
+    if (!isAdmin && isHospitalUser) {
+      let hospitalName = (user.name || '').trim();
+      if (user.hospitalId) {
+        const hospDoc = await dbResolver.findOne('Hospital', { hospitalId: user.hospitalId });
+        if (hospDoc && hospDoc.name) {
+          hospitalName = hospDoc.name.trim();
+        }
+      }
+
+      if (hospitalName) {
+        const target = hospitalName.toLowerCase();
+        requests = requests.filter(r => {
+          const reqH = (r.hospital || '').trim().toLowerCase();
+          return reqH === target || (reqH && (reqH.includes(target) || target.includes(reqH)));
+        });
+      }
+    }
+
     res.json(requests);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -15,8 +38,11 @@ const getRequests = async (req, res) => {
 // @desc    Create new emergency request
 // @route   POST /api/requests
 // @access  Private
+// @desc    Create new emergency request
+// @route   POST /api/requests
+// @access  Private
 const createRequest = async (req, res) => {
-  const { patientName, bloodGroup, hospital, district, status } = req.body;
+  const { patientName, bloodGroup, hospital, requesterHospital, units, district, status } = req.body;
 
   if (!patientName || !bloodGroup || !hospital || !district) {
     return res.status(400).json({ message: 'Please provide all required fields' });
@@ -31,13 +57,15 @@ const createRequest = async (req, res) => {
       patientName,
       bloodGroup,
       hospital,
+      requesterHospital: requesterHospital || req.user?.name || 'National Blood Transfusion Service',
+      units: Number(units) || 1,
       district,
       status: status || 'Pending'
     });
 
     // Automatically trigger notification for new alert
     await dbResolver.create('Notification', {
-      message: `Emergency request ${request.requestId} (${bloodGroup}) created by ${hospital}`,
+      message: `Emergency request ${request.requestId} (${bloodGroup}) for ${patientName} - requested by ${request.requesterHospital} to ${hospital}`,
       type: 'Alert',
       status: 'Unread'
     });
@@ -52,17 +80,20 @@ const createRequest = async (req, res) => {
 // @route   PUT /api/requests/:id
 // @access  Private
 const updateRequest = async (req, res) => {
-  const { patientName, bloodGroup, hospital, district, status } = req.body;
+  const { patientName, bloodGroup, hospital, requesterHospital, units, district, status } = req.body;
 
   try {
     const oldRequest = await dbResolver.findById('EmergencyRequest', req.params.id);
-    const updated = await dbResolver.findByIdAndUpdate('EmergencyRequest', req.params.id, {
-      patientName,
-      bloodGroup,
-      hospital,
-      district,
-      status
-    });
+    const updatePayload = {};
+    if (patientName !== undefined) updatePayload.patientName = patientName;
+    if (bloodGroup !== undefined) updatePayload.bloodGroup = bloodGroup;
+    if (hospital !== undefined) updatePayload.hospital = hospital;
+    if (requesterHospital !== undefined) updatePayload.requesterHospital = requesterHospital;
+    if (units !== undefined) updatePayload.units = Number(units);
+    if (district !== undefined) updatePayload.district = district;
+    if (status !== undefined) updatePayload.status = status;
+
+    const updated = await dbResolver.findByIdAndUpdate('EmergencyRequest', req.params.id, updatePayload);
 
     if (!updated) {
       return res.status(404).json({ message: 'Emergency request not found' });

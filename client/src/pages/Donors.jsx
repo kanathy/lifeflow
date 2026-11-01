@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle, CheckCircle, Eye } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
@@ -36,10 +36,12 @@ const Donors = ({ user }) => {
     'Anuradhapura', 'Polonnaruwa', 'Badulla', 'Moneragala', 'Ratnapura', 'Kegalle'
   ];
 
+  const isAdmin = user?.role === 'Administrator';
+
   const fetchDonors = () => {
     setLoading(true);
     fetch('/api/donors', {
-      headers: { Authorization: `Bearer ${user.token}` }
+      headers: { Authorization: `Bearer ${user?.token || ''}` }
     })
       .then(res => res.json())
       .then(data => {
@@ -77,6 +79,9 @@ const Donors = ({ user }) => {
     setFilteredDonors(result);
   }, [searchTerm, filterGroup, donors]);
 
+  const isHospitalUser = user?.role === 'Hospital' || user?.role === 'Hospital Staff' || !!user?.hospitalId;
+  const userDistrict = user?.hospitalDistrict || (user?.name?.toLowerCase().includes('jaffna') ? 'Jaffna' : 'Colombo');
+
   const handleOpenAdd = () => {
     setEditMode(false);
     setForm({
@@ -84,7 +89,7 @@ const Donors = ({ user }) => {
       bloodGroup: 'O+',
       contact: '',
       email: '',
-      district: 'Colombo',
+      district: isHospitalUser ? userDistrict : 'Colombo',
       status: 'Active',
       lastDonationDate: ''
     });
@@ -92,6 +97,11 @@ const Donors = ({ user }) => {
   };
 
   const handleOpenEdit = (item) => {
+    if (!isAdmin) {
+      setFeedbackMsg('View only: Only administrators are authorized to edit donor details.');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+      return;
+    }
     setEditMode(true);
     setSelectedId(item._id);
     setForm({
@@ -110,6 +120,11 @@ const Donors = ({ user }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (editMode && !isAdmin) {
+      setFeedbackMsg('Forbidden: Only administrators can modify donor records.');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+      return;
+    }
     const endpoint = editMode ? `/api/donors/${selectedId}` : '/api/donors';
     const method = editMode ? 'PUT' : 'POST';
 
@@ -117,7 +132,7 @@ const Donors = ({ user }) => {
       method,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${user.token}`
+        Authorization: `Bearer ${user?.token || ''}`
       },
       body: JSON.stringify(form)
     })
@@ -142,19 +157,24 @@ const Donors = ({ user }) => {
   };
 
   const handleDelete = (item) => {
+    if (!isAdmin) {
+      setFeedbackMsg('View only: Only administrators are authorized to delete donors.');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+      return;
+    }
     setItemToDelete(item);
     setDeleteModalOpen(true);
   };
 
   const handleConfirmDelete = () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || !isAdmin) return;
 
     const donorName = itemToDelete.name;
 
     setDeleting(true);
     fetch(`/api/donors/${itemToDelete._id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${user.token}` }
+      headers: { Authorization: `Bearer ${user?.token || ''}` }
     })
       .then(() => {
         setDeleting(false);
@@ -215,6 +235,23 @@ const Donors = ({ user }) => {
         </button>
       </div>
 
+      {!isAdmin && (
+        <div style={{
+          padding: '12px 18px',
+          background: 'rgba(59, 130, 246, 0.06)',
+          border: '1px solid rgba(59, 130, 246, 0.2)',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontSize: '0.85rem',
+          color: 'var(--text-secondary)'
+        }}>
+          <Eye size={16} color="#3B82F6" />
+          <span><strong>Hospital Donor Portal:</strong> You can register new volunteer donors to the network. Existing donor records are in View-Only mode (modifications and removals are managed by System Administrators).</span>
+        </div>
+      )}
+
       {/* Stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
         <div className="dashboard-card" style={{ padding: '16px' }}>
@@ -268,8 +305,8 @@ const Donors = ({ user }) => {
         ) : filteredDonors.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>No donor records match the query.</div>
         ) : (
-          <div className="table-container" style={{ margin: 0, border: 'none' }}>
-            <table className="custom-table">
+          <div className="table-container hospital-table-scroll" style={{ margin: 0, border: 'none', overflowX: 'auto' }}>
+            <table className="custom-table" style={{ width: '100%', minWidth: '950px', tableLayout: 'auto' }}>
               <thead>
                 <tr>
                   <th>Donor</th>
@@ -329,31 +366,51 @@ const Donors = ({ user }) => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={() => handleOpenEdit(item)}
-                          style={{
-                            padding: '6px',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--text-sidebar)'
-                          }}
-                        >
-                          <Edit2 size={12} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item)}
-                          style={{
-                            padding: '6px',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--color-danger)',
-                            backgroundColor: 'var(--color-danger-light)'
-                          }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                      {isAdmin ? (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => handleOpenEdit(item)}
+                            title="Edit Donor Profile"
+                            style={{
+                              padding: '6px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: 'var(--text-sidebar)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item)}
+                            title="Delete Donor Profile"
+                            style={{
+                              padding: '6px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: 'var(--color-danger)',
+                              backgroundColor: 'var(--color-danger-light)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{
+                          fontSize: '0.72rem',
+                          color: 'var(--text-muted, #64748b)',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          background: 'var(--bg-card, #f1f5f9)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontWeight: 600
+                        }}>
+                          <Eye size={12} /> View only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

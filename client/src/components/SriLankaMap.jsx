@@ -55,21 +55,10 @@ const SriLankaMap = ({ availability, onDistrictSelect, selectedDistrict }) => {
   };
 
   const getBloodBreakdown = (info) => {
-    if (info?.bloodGroups && Object.keys(info.bloodGroups).length >= 8) {
+    if (info?.bloodGroups) {
       return info.bloodGroups;
     }
-    const u = Number(info?.totalUnits) || 0;
-    if (u <= 0) return { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 };
-    const oPlus = Math.round(u * 0.36);
-    const aPlus = Math.round(u * 0.24);
-    const bPlus = Math.round(u * 0.22);
-    const abPlus = Math.round(u * 0.08);
-    const oMinus = Math.round(u * 0.04);
-    const aMinus = Math.round(u * 0.03);
-    const bMinus = Math.round(u * 0.02);
-    const remainder = u - (oPlus + aPlus + bPlus + abPlus + oMinus + aMinus + bMinus);
-    const abMinus = Math.max(0, remainder);
-    return { 'A+': aPlus, 'A-': aMinus, 'B+': bPlus, 'B-': bMinus, 'O+': oPlus, 'O-': oMinus, 'AB+': abPlus, 'AB-': abMinus };
+    return { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 };
   };
 
   const currentDistrictName = hovered || selectedDistrict || 'Colombo';

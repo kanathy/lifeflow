@@ -19,6 +19,14 @@ const EmergencyRequestSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  requesterHospital: {
+    type: String,
+    default: 'National Blood Transfusion Service'
+  },
+  units: {
+    type: Number,
+    default: 1
+  },
   district: {
     type: String,
     required: true

@@ -62,6 +62,20 @@ const Hospitals = ({ user }) => {
     'Polonnaruwa', 'Puttalam', 'Ratnapura', 'Trincomalee', 'Vavuniya'
   ];
 
+  const isAdmin = user?.role === 'Administrator';
+  const isHospitalUser = user?.role === 'Hospital' || user?.role === 'Hospital Staff' || !!user?.hospitalId;
+  const userHospitalName = (user?.hospitalName || user?.name || '').trim();
+  const userHospitalId = user?.hospitalId || null;
+
+  const isMyHospital = (item) => {
+    if (isAdmin) return true;
+    if (!isHospitalUser) return false;
+    if (userHospitalId && item.hospitalId && item.hospitalId === userHospitalId) return true;
+    const itemHosp = (item.name || '').trim().toLowerCase();
+    const myHosp = userHospitalName.toLowerCase();
+    return itemHosp === myHosp || (itemHosp && (itemHosp.includes(myHosp) || myHosp.includes(itemHosp)));
+  };
+
   const fetchHospitals = () => {
     setLoading(true);
     fetch('/api/hospitals', {
@@ -119,6 +133,10 @@ const Hospitals = ({ user }) => {
   };
 
   const handleOpenEdit = (item) => {
+    if (!isMyHospital(item)) {
+      showToast('You are only authorized to update your own hospital details.', 'error');
+      return;
+    }
     setEditMode(true);
     setSelectedId(item._id);
     setForm({
@@ -206,7 +224,7 @@ const Hospitals = ({ user }) => {
   const activeCount = hospitals.filter(h => h.status === 'Active').length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0, maxWidth: '100%', width: '100%' }}>
 
       {/* Toast Notification */}
       {toast && (
@@ -238,11 +256,33 @@ const Hospitals = ({ user }) => {
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Outfit' }}>Registered Hospitals</h1>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Manage medical centers requesting blood units</p>
         </div>
-        <button className="btn btn-primary" onClick={handleOpenAdd}>
-          <Plus size={16} />
-          <span>Add New Hospital</span>
-        </button>
+        {isAdmin && (
+          <button className="btn btn-primary" onClick={handleOpenAdd}>
+            <Plus size={16} />
+            <span>Add New Hospital</span>
+          </button>
+        )}
       </div>
+
+      {/* Hospital Portal Notification Banner */}
+      {isHospitalUser && !isAdmin && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
+          border: '1px solid rgba(37, 99, 235, 0.25)',
+          borderRadius: '10px',
+          padding: '12px 16px',
+          fontSize: '0.82rem',
+          color: '#1e40af'
+        }}>
+          <Building2 size={20} color="#2563eb" />
+          <div style={{ flex: 1 }}>
+            <strong>Hospital Portal Active ({userHospitalName})</strong>: You are viewing registered hospitals in read-only mode, and are authorized to update contact details for <strong>{userHospitalName}</strong> only.
+          </div>
+        </div>
+      )}
 
       {/* Stats cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
@@ -304,7 +344,7 @@ const Hospitals = ({ user }) => {
       </div>
 
       {/* Table list */}
-      <div className="dashboard-card" style={{ padding: '0px', overflow: 'hidden' }}>
+      <div className="dashboard-card" style={{ padding: '0px', overflow: 'hidden', minWidth: 0, maxWidth: '100%', width: '100%' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading hospitals database...</div>
         ) : filteredHospitals.length === 0 ? (
@@ -323,54 +363,74 @@ const Hospitals = ({ user }) => {
               margin: 0,
               border: 'none',
               overflowX: 'auto',
-              overflowY: 'auto',
-              maxHeight: 'calc(100vh - 290px)',
-              minHeight: '340px',
+              overflowY: 'visible',
               width: '100%',
+              maxWidth: '100%',
               outline: 'none',
               position: 'relative'
             }}
           >
-            <table className="custom-table" style={{ width: '100%', tableLayout: 'auto' }}>
+            <table className="custom-table" style={{ width: '100%', minWidth: '1280px', tableLayout: 'auto' }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Hospital ID</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Hospital Name</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>District</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Sector Type</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Contact Number</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Coordinator Email</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Address</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Status</th>
-                  <th style={{ whiteSpace: 'nowrap', padding: '10px 8px', fontSize: '0.72rem', textAlign: 'center', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Actions</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Hospital ID</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Hospital Name</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>District</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Sector Type</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Contact Number</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Coordinator Email</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Address</th>
+                  <th style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.72rem', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--bg-primary)' }}>Status</th>
+                  <th style={{
+                    whiteSpace: 'nowrap',
+                    padding: '10px 14px',
+                    fontSize: '0.72rem',
+                    textAlign: 'center',
+                    position: 'sticky',
+                    top: 0,
+                    right: 0,
+                    zIndex: 15,
+                    backgroundColor: 'var(--bg-primary)',
+                    boxShadow: '-3px 0 6px rgba(0,0,0,0.06)',
+                    minWidth: '95px'
+                  }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredHospitals.map((item, idx) => (
-                  <tr key={item._id}>
-                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                  <tr key={item._id} style={isMyHospital(item) && !isAdmin ? { backgroundColor: 'rgba(225, 29, 72, 0.04)' } : {}}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}>
                       <span style={{ fontWeight: 600, fontSize: '0.78rem' }}>{item.hospitalId || `HSP${String(idx + 1).padStart(3, '0')}`}</span>
                     </td>
-                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap', padding: '9px 8px', fontSize: '0.8rem' }}>{item.name}</td>
-                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px', fontSize: '0.78rem' }}>
+                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.82rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>{item.name}</span>
+                        {isMyHospital(item) && !isAdmin && (
+                          <span className="badge badge-primary" style={{ fontSize: '0.62rem', flexShrink: 0 }}>
+                            Your Hospital
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 12px', fontSize: '0.78rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <MapPin size={11} color="var(--text-light)" />
                         <span>{item.district}</span>
                       </div>
                     </td>
-                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}>
                       <span className={`badge badge-${item.type === 'Government' ? 'success' : 'info'}`} style={{ fontSize: '0.7rem', padding: '2px 7px' }}>
                         {item.type}
                       </span>
                     </td>
-                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Phone size={11} color="var(--text-light)" />
                         <span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{item.contact}</span>
                       </div>
                     </td>
                     {/* Email column */}
-                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}>
                       {item.email ? (
                         <a
                           href={`mailto:${item.email}`}
@@ -381,12 +441,11 @@ const Hospitals = ({ user }) => {
                             color: '#2563eb',
                             fontSize: '0.75rem',
                             textDecoration: 'none',
-                            fontWeight: 500,
-                            whiteSpace: 'nowrap'
+                            fontWeight: 500
                           }}
                           title={item.email}
                         >
-                          <Mail size={11} />
+                          <Mail size={11} style={{ flexShrink: 0 }} />
                           <span>{item.email}</span>
                         </a>
                       ) : (
@@ -394,11 +453,11 @@ const Hospitals = ({ user }) => {
                       )}
                     </td>
                     {/* Address column */}
-                    <td style={{ padding: '9px 8px', maxWidth: '170px' }}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}>
                       {item.address ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
                           <Building2 size={11} color="var(--text-light)" style={{ flexShrink: 0 }} />
-                          <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.address}>
+                          <span style={{ color: 'var(--text-secondary)' }}>
                             {item.address}
                           </span>
                         </div>
@@ -406,39 +465,59 @@ const Hospitals = ({ user }) => {
                         <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>—</span>
                       )}
                     </td>
-                    <td style={{ whiteSpace: 'nowrap', padding: '9px 8px' }}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}>
                       <span className={`badge badge-${item.status === 'Active' ? 'success' : 'danger'}`} style={{ fontSize: '0.7rem', padding: '2px 7px' }}>
                         {item.status}
                       </span>
                     </td>
-                    <td style={{ whiteSpace: 'nowrap', textAlign: 'center', padding: '9px 8px' }}>
-                      <div style={{ display: 'inline-flex', gap: '5px', justifyContent: 'center' }}>
-                        <button
-                          onClick={() => handleOpenEdit(item)}
-                          style={{
-                            padding: '4px 6px',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--text-sidebar)'
-                          }}
-                          title="Edit Hospital"
-                        >
-                          <Edit2 size={11} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item)}
-                          style={{
-                            padding: '4px 6px',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--color-danger)',
-                            backgroundColor: 'var(--color-danger-light)'
-                          }}
-                          title="Delete Hospital"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                    <td style={{
+                      whiteSpace: 'nowrap',
+                      textAlign: 'center',
+                      padding: '10px 14px',
+                      position: 'sticky',
+                      right: 0,
+                      zIndex: 3,
+                      backgroundColor: isMyHospital(item) && !isAdmin ? '#fff1f2' : 'var(--bg-card, #ffffff)',
+                      boxShadow: '-3px 0 6px rgba(0,0,0,0.06)',
+                      minWidth: '95px'
+                    }}>
+                      {isMyHospital(item) ? (
+                        <div style={{ display: 'inline-flex', gap: '5px', justifyContent: 'center' }}>
+                          <button
+                            onClick={() => handleOpenEdit(item)}
+                            style={{
+                              padding: '4px 6px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: 'var(--text-sidebar)',
+                              cursor: 'pointer'
+                            }}
+                            title="Edit Hospital Details"
+                          >
+                            <Edit2 size={11} />
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDelete(item)}
+                              style={{
+                                padding: '4px 6px',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '4px',
+                                color: 'var(--color-danger)',
+                                backgroundColor: 'var(--color-danger-light)',
+                                cursor: 'pointer'
+                              }}
+                              title="Delete Hospital"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                          View only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -14,8 +14,12 @@ const getDonors = async (req, res) => {
 
 // @desc    Create donor
 // @route   POST /api/donors
-// @access  Private
+// @access  Private (Admin and Hospital users)
 const createDonor = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Not authorized' });
+  }
+
   const { name, bloodGroup, contact, email, status, district, lastDonationDate } = req.body;
 
   if (!name || !bloodGroup || !contact || !district) {
@@ -30,8 +34,6 @@ const createDonor = async (req, res) => {
       bloodGroup,
       contact,
       email,
-
-
       status: status || 'Active',
       district,
       lastDonationDate: lastDonationDate ? new Date(lastDonationDate) : null
@@ -44,8 +46,12 @@ const createDonor = async (req, res) => {
 
 // @desc    Update donor
 // @route   PUT /api/donors/:id
-// @access  Private
+// @access  Private (Admin only)
 const updateDonor = async (req, res) => {
+  if (!req.user || req.user.role !== 'Administrator') {
+    return res.status(403).json({ message: 'Forbidden: Only administrators can edit donor records.' });
+  }
+
   const { name, bloodGroup, contact, email, status, district, lastDonationDate } = req.body;
 
   try {
@@ -70,8 +76,12 @@ const updateDonor = async (req, res) => {
 
 // @desc    Delete donor
 // @route   DELETE /api/donors/:id
-// @access  Private
+// @access  Private (Admin only)
 const deleteDonor = async (req, res) => {
+  if (!req.user || req.user.role !== 'Administrator') {
+    return res.status(403).json({ message: 'Forbidden: Only administrators can remove donor records.' });
+  }
+
   try {
     const deleted = await dbResolver.findByIdAndDelete('Donor', req.params.id);
     if (!deleted) {
