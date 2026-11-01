@@ -177,10 +177,10 @@ const DetailedReportModal = ({
 
   const isDisease = type === 'disease';
   const themeColor = isDisease ? '#8b5cf6' : '#f59e0b';
-  const title = isDisease ? 'Disease Prediction Detailed Report' : 'Accident Prediction Detailed Report';
+  const title = isDisease ? 'Disease Blood Demand Detailed Report' : 'Accident Blood Demand Detailed Report';
   const subtitle = isDisease
-    ? 'Comprehensive outbreak analytics, 7-month trend forecast, and all 25 Sri Lanka districts breakdown'
-    : 'Comprehensive accident analytics, 7-month trend forecast, and all 25 Sri Lanka districts breakdown';
+    ? 'Comprehensive disease blood demand analytics, 7-month trend forecast, and all 25 Sri Lanka districts breakdown'
+    : 'Comprehensive accident emergency blood demand analytics, 7-month trend forecast, and all 25 Sri Lanka districts breakdown';
   const totalCases = predictionData?.predictedCases ?? predictionData?.predictedAccidents ?? '—';
 
   // Filter districts
@@ -277,33 +277,33 @@ const DetailedReportModal = ({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
           <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-primary, rgba(0,0,0,0.03))', border: '1px solid var(--border-color)' }}>
             <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
-              {isDisease ? 'Total Predicted Cases' : 'Total Predicted Accidents'}
+              {isDisease ? 'Disease Blood Units Needed' : 'Accident Blood Units Needed'}
             </span>
             <div style={{ fontSize: '1.7rem', fontWeight: 800, color: themeColor, lineHeight: 1.2, marginTop: '2px' }}>
-              {totalCases}
+              {totalCases} <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Units</span>
             </div>
             <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>For {district} ({monthName} {year})</span>
           </div>
 
           <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-primary, rgba(0,0,0,0.03))', border: '1px solid var(--border-color)' }}>
             <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
-              Total Outbreak Cases
+              Total Regional Blood Demand
             </span>
             <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1.2, marginTop: '2px' }}>
-              {totalOutbreakSum} <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Cases</span>
+              {totalOutbreakSum} <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Units</span>
             </div>
             <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Across {activeCount} active districts</span>
           </div>
 
           <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-primary, rgba(0,0,0,0.03))', border: '1px solid var(--border-color)' }}>
             <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
-              Top Outbreak District
+              Top Demand District
             </span>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, lineHeight: 1.2, marginTop: '4px' }}>
               {topDistrict ? topDistrict.name : 'Colombo'}
             </div>
             <span style={{ fontSize: '0.72rem', color: themeColor, fontWeight: 700 }}>
-              {topDistrict ? `${topDistrict.count} cases (${topDistrict.percentage}%)` : '—'}
+              {topDistrict ? `${topDistrict.count} Units (${topDistrict.percentage}%)` : '—'}
             </span>
           </div>
 
@@ -314,7 +314,7 @@ const DetailedReportModal = ({
             <div style={{ fontSize: '0.74rem', marginTop: '4px', lineHeight: 1.4 }}>
               <div><strong>Blood Group:</strong> {bloodGroup}</div>
               <div><strong>Rainfall:</strong> {rainfall} mm</div>
-              <div><strong>Festival:</strong> {festival === '1' ? 'Yes' : 'No'}</div>
+              <div style={{ display: 'none' }}><strong>Festival:</strong> {festival === '1' ? 'Yes' : 'No'}</div>
             </div>
           </div>
         </div>
@@ -335,7 +335,7 @@ const DetailedReportModal = ({
             </span>
           </div>
 
-          <DetailedTrendChart trend={trend} months={monthLabels} color={themeColor} label={isDisease ? 'cases' : 'accidents'} />
+          <DetailedTrendChart trend={trend} months={monthLabels} color={themeColor} label="units" />
         </div>
 
         {/* ── Section 2: Top Disease Outbreaks (All 25 Districts) ("Top Disease Outbreaks la ela district da details um venum") ── */}
@@ -343,10 +343,10 @@ const DetailedReportModal = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
             <div>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>
-                {isDisease ? 'Top Disease Outbreaks — All 25 Districts' : 'Top Accident Outbreaks — All 25 Districts'}
+                {isDisease ? 'Disease Blood Demand — All 25 Districts' : 'Accident Blood Demand — All 25 Districts'}
               </h3>
               <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
-                Complete district-wise outbreak cases, percentages, risk status, and rainfall baseline
+                Complete district-wise blood units demand, percentages, risk status, and rainfall baseline
               </p>
             </div>
 
@@ -488,8 +488,8 @@ const DetailedReportModal = ({
                         }}
                       />
                     </div>
-                    <div style={{ minWidth: '40px', fontSize: '0.76rem', fontWeight: 800, textAlign: 'right', color: d.count > 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                      {d.count}
+                    <div style={{ minWidth: '60px', fontSize: '0.76rem', fontWeight: 800, textAlign: 'right', color: d.count > 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                      {d.count} Units
                     </div>
                     <div style={{ minWidth: '55px', fontSize: '0.72rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
                       ({d.percentage}%)
@@ -522,7 +522,7 @@ const DetailedReportModal = ({
                   <tr>
                     <th>#</th>
                     <th>District</th>
-                    <th>Outbreak Cases</th>
+                    <th>Blood Units Needed</th>
                     <th>Share (%)</th>
                     <th>Risk Grade</th>
                     <th>Baseline Rainfall</th>
@@ -535,7 +535,7 @@ const DetailedReportModal = ({
                       <td style={{ color: 'var(--text-secondary)' }}>{idx + 1}</td>
                       <td style={{ fontWeight: 700 }}>{d.name}</td>
                       <td style={{ fontWeight: 800, color: d.count > 0 ? themeColor : 'var(--text-secondary)' }}>
-                        {d.count} {d.count === 1 ? 'case' : 'cases'}
+                        {d.count} Units
                       </td>
                       <td style={{ fontWeight: 600 }}>{d.percentage}%</td>
                       <td>
@@ -673,13 +673,13 @@ const MultiLineChart = ({ diseaseTrend, accidentTrend, shortageTrend, months = [
 };
 
 // ─── Progress bar row ─────────────────────────────────────────────────────────
-const BarRow = ({ name, count, percentage, color }) => (
+const BarRow = ({ name, count, percentage, color, unit = 'Units' }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
     <div style={{ width: '110px', fontSize: '0.75rem', color: 'var(--text-secondary)', flexShrink: 0 }}>{name}</div>
     <div style={{ flex: 1, height: '5px', borderRadius: '99px', background: 'var(--border-color)', overflow: 'hidden' }}>
       <div style={{ width: `${percentage}%`, height: '100%', borderRadius: '99px', background: color }} />
     </div>
-    <div style={{ fontSize: '0.72rem', fontWeight: 700, minWidth: '32px', textAlign: 'right' }}>{count}</div>
+    <div style={{ fontSize: '0.72rem', fontWeight: 700, minWidth: '55px', textAlign: 'right' }}>{count} {unit}</div>
     <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', minWidth: '42px', textAlign: 'right' }}>({percentage}%)</div>
   </div>
 );
@@ -861,14 +861,14 @@ const Prediction = ({ user }) => {
   const [dDistrict, setDDistrict] = useState('Colombo');
   const [dBloodGroup, setDBloodGroup] = useState('A+');
   const [dRainfall, setDRainfall] = useState(() => String(getTodayRainfall('Colombo')));
-  const [dFestival, setDFestival] = useState('0');
+  const [dFestival, setDFestival] = useState('1');
 
   const [aMonth, setAMonth] = useState(currentMonth);
   const [aYear, setAYear] = useState(currentYear);
   const [aDistrict, setADistrict] = useState('Colombo');
   const [aBloodGroup, setABloodGroup] = useState('A+');
   const [aRainfall, setARainfall] = useState(() => String(getTodayRainfall('Colombo')));
-  const [aFestival, setAFestival] = useState('0');
+  const [aFestival, setAFestival] = useState('1');
 
   const [sMonth, setSMonth] = useState(currentMonth);
   const [sYear, setSYear] = useState(currentYear);
@@ -1184,8 +1184,8 @@ const Prediction = ({ user }) => {
               <Activity size={17} color="#fff" />
             </div>
             <div>
-              <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#8b5cf6' }}>Disease Prediction</h3>
-              <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Predicts the number of disease cases</p>
+              <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#8b5cf6' }}>Disease Blood Demand</h3>
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Predicts blood units required for disease cases</p>
             </div>
           </div>
 
@@ -1217,31 +1217,27 @@ const Prediction = ({ user }) => {
                 {['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-'].map(group => <option key={group} value={group}>{group}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', gridColumn: '1 / -1' }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>Rainfall (mm)</span>
-                <span style={{ fontSize: '0.62rem', color: weatherLoadingD ? '#f59e0b' : '#059669', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                  {weatherLoadingD ? (
-                    <>
-                      <RefreshCw size={10} className="animate-spin" /> Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <CloudRain size={11} /> OpenWeather API
-                    </>
-                  )}
+                {weatherLoadingD && (
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                    <RefreshCw size={10} className="animate-spin" /> Fetching...
+                  </span>
+                )}
+                <span style={{ display: 'none' }}>
+                  <CloudRain size={11} /> OpenWeather API
                 </span>
               </span>
               <input type="number" min="0" placeholder="e.g. 125" value={dRainfall} onChange={e => setDRainfall(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: '3px', fontSize: '0.72rem', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 6px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontWeight: 600 }} />
             </label>
-            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'none', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
               Festival
-              <select value={dFestival} onChange={e => setDFestival(e.target.value)}
+              <select value={dFestival || '1'} onChange={e => setDFestival(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: '3px', fontSize: '0.72rem', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 6px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>
-                <option value="">Select</option>
-                <option value="0">No</option>
                 <option value="1">Yes</option>
+                <option value="0">No</option>
               </select>
             </label>
           </div>
@@ -1263,8 +1259,13 @@ const Prediction = ({ user }) => {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '4px' }}>
                 <div>
-                  <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Total Predicted Cases</p>
-                  <p style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>{diseaseError ? '—' : diseaseData?.predictedCases?.toLocaleString() ?? '—'}</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Predicted Blood Units Needed</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <p style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1, color: '#8b5cf6' }}>
+                      {diseaseError ? '—' : diseaseData?.predictedCases?.toLocaleString() ?? '—'}
+                    </p>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#8b5cf6' }}>Units</span>
+                  </div>
                   {diseaseError && <p style={{ fontSize: '0.7rem', color: '#ef4444', marginTop: '4px' }}>{diseaseError}</p>}
                 </div>
                 {diseaseData?.trend && <MiniSparkline data={diseaseData.trend} color="#8b5cf6" />}
@@ -1282,9 +1283,9 @@ const Prediction = ({ user }) => {
                   ];
                 return (
                   <div style={{ marginTop: '10px' }}>
-                    <p style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: '8px' }}>Top Disease Outbreaks</p>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: '8px' }}>Top Disease Blood Demand</p>
                     {hotspots.map(h => (
-                      <BarRow key={h.name} name={h.name} count={h.count} percentage={h.percentage} color="#8b5cf6" />
+                      <BarRow key={h.name} name={h.name} count={h.count} percentage={h.percentage} color="#8b5cf6" unit="Units" />
                     ))}
                   </div>
                 );
@@ -1308,8 +1309,8 @@ const Prediction = ({ user }) => {
               <AlertTriangle size={17} color="#fff" />
             </div>
             <div>
-              <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f59e0b' }}>Accident Prediction</h3>
-              <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Predicts the number of accidents</p>
+              <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f59e0b' }}>Accident Blood Demand</h3>
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Predicts blood units required for accident emergencies</p>
             </div>
           </div>
 
@@ -1341,31 +1342,27 @@ const Prediction = ({ user }) => {
                 {['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-'].map(group => <option key={group} value={group}>{group}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', gridColumn: '1 / -1' }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>Rainfall (mm)</span>
-                <span style={{ fontSize: '0.62rem', color: weatherLoadingA ? '#f59e0b' : '#059669', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                  {weatherLoadingA ? (
-                    <>
-                      <RefreshCw size={10} className="animate-spin" /> Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <CloudRain size={11} /> OpenWeather API
-                    </>
-                  )}
+                {weatherLoadingA && (
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                    <RefreshCw size={10} className="animate-spin" /> Fetching...
+                  </span>
+                )}
+                <span style={{ display: 'none' }}>
+                  <CloudRain size={11} /> OpenWeather API
                 </span>
               </span>
               <input type="number" min="0" placeholder="e.g. 125" value={aRainfall} onChange={e => setARainfall(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: '3px', fontSize: '0.72rem', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 6px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontWeight: 600 }} />
             </label>
-            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'none', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
               Festival
-              <select value={aFestival} onChange={e => setAFestival(e.target.value)}
+              <select value={aFestival || '1'} onChange={e => setAFestival(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: '3px', fontSize: '0.72rem', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 6px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>
-                <option value="">Select</option>
-                <option value="0">No</option>
                 <option value="1">Yes</option>
+                <option value="0">No</option>
               </select>
             </label>
           </div>
@@ -1387,8 +1384,13 @@ const Prediction = ({ user }) => {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '4px' }}>
                 <div>
-                  <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Total Predicted Accidents</p>
-                  <p style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>{accidentError ? '—' : accidentData?.predictedAccidents?.toLocaleString() ?? '—'}</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Predicted Blood Units Needed</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <p style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1, color: '#f59e0b' }}>
+                      {accidentError ? '—' : accidentData?.predictedAccidents?.toLocaleString() ?? '—'}
+                    </p>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f59e0b' }}>Units</span>
+                  </div>
                   {accidentError && <p style={{ fontSize: '0.7rem', color: '#ef4444', marginTop: '4px' }}>{accidentError}</p>}
                 </div>
                 {accidentData?.trend && <MiniSparkline data={accidentData.trend} color="#f59e0b" />}
@@ -1406,9 +1408,9 @@ const Prediction = ({ user }) => {
                   ];
                 return (
                   <div style={{ marginTop: '10px' }}>
-                    <p style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: '8px' }}>Top Accident Outbreaks</p>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: '8px' }}>Top Accident Blood Demand</p>
                     {hotspots.map(h => (
-                      <BarRow key={h.name} name={h.name} count={h.count} percentage={h.percentage} color="#f59e0b" />
+                      <BarRow key={h.name} name={h.name} count={h.count} percentage={h.percentage} color="#f59e0b" unit="Units" />
                     ))}
                   </div>
                 );
@@ -1511,11 +1513,11 @@ const Prediction = ({ user }) => {
             <div style={{ display: 'flex', gap: '14px', fontSize: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#8b5cf6' }} />
-                <span>Disease Cases</span>
+                <span>Disease Blood Demand (Units)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }} />
-                <span>Predicted Accidents</span>
+                <span>Accident Blood Demand (Units)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }} />
