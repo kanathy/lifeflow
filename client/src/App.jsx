@@ -49,6 +49,25 @@ const App = () => {
     localStorage.removeItem('lifeflow_user');
   };
 
+  // Intercept 401 responses to automatically clear invalid/expired sessions
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 401) {
+        const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+        if (!url.includes('/api/auth/login')) {
+          setUser(null);
+          localStorage.removeItem('lifeflow_user');
+        }
+      }
+      return response;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
   return (
     <Router>
       <Routes>

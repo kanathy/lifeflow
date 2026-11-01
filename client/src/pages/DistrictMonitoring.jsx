@@ -226,6 +226,7 @@ const DistrictMonitoring = ({ user }) => {
     .sort((a, b) => b.availableUnits - a.availableUnits);
 
   const topRecommendedHospital = rankedDonorHospitals[0] || hospitalsList[0];
+  const selectedDonorHospital = rankedDonorHospitals.find(h => h.name === dispatchForm.donorHospitalName) || topRecommendedHospital;
 
   // Open the Coordinate Dispatch Modal
   const handleOpenDispatchModal = () => {
@@ -406,21 +407,42 @@ const DistrictMonitoring = ({ user }) => {
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Real-time regional blood reserve network alerts & inter-district dispatch coordination</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '24px' }} className="flex-column-responsive">
+      <div
+        className="district-monitoring-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(460px, 1.25fr) minmax(0, 1.4fr)',
+          gap: '24px',
+          alignItems: 'start'
+        }}
+      >
         {/* Left: Map Card */}
-        <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '20px', width: '100%' }}>Interactive Regional Status</h3>
+        <div
+          className="dashboard-card"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            width: '100%',
+            minWidth: '440px',
+            padding: '24px'
+          }}
+        >
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '20px', width: '100%' }}>
+            Interactive Regional Status
+          </h3>
           <div style={{ width: '100%', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <SriLankaMap
               availability={districtAvailability}
               onDistrictSelect={(dist) => setSelectedDistrict(dist)}
               selectedDistrict={selectedDistrict}
+              maxHeight="540px"
             />
           </div>
         </div>
 
         {/* Right: Detailed List & Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
           {/* Active selection info */}
           {selectedDetails && (
             <div className="dashboard-card" style={{
@@ -714,7 +736,7 @@ const DistrictMonitoring = ({ user }) => {
                   {filteredDistricts.length === 0 ? (
                     <tr>
                       <td colSpan={13} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                        No districts found matching "{searchTerm}".
+                        No districts found matching &quot;{searchTerm}&quot;.
                         <button
                           onClick={() => setSearchTerm('')}
                           style={{ background: 'none', border: 'none', color: '#e11d48', fontWeight: 700, cursor: 'pointer', marginLeft: '8px' }}
@@ -930,35 +952,32 @@ const DistrictMonitoring = ({ user }) => {
                   </div>
 
                   {/* Recipient Contact Preview — updates based on dropdown selection */}
-                  {(() => {
-                    const selectedDonorHospital = rankedDonorHospitals.find(h => h.name === dispatchForm.donorHospitalName) || topRecommendedHospital;
-                    return (
-                      <div style={{
-                        padding: '10px 14px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-secondary)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px'
-                      }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.78rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
-                          <Building2 size={13} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
-                          {selectedDonorHospital.name} — {selectedDonorHospital.district}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Mail size={13} color="#2563eb" />
-                          <span><strong>Coordinator Email:</strong> {selectedDonorHospital.email}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Phone size={13} color="#16a34a" />
-                          <span><strong>Hospital Hotline:</strong> {selectedDonorHospital.contact || 'N/A'}</span>
-                        </div>
+                  {selectedDonorHospital && (
+                    <div style={{
+                      padding: '10px 14px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.78rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                        <Building2 size={13} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
+                        {selectedDonorHospital.name} — {selectedDonorHospital.district}
                       </div>
-                    );
-                  })()}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Mail size={13} color="#2563eb" />
+                        <span><strong>Coordinator Email:</strong> {selectedDonorHospital.email}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Phone size={13} color="#16a34a" />
+                        <span><strong>Hospital Hotline:</strong> {selectedDonorHospital.contact || 'N/A'}</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Submit Button */}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>

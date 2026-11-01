@@ -1,13 +1,15 @@
 import React, { useState, useRef } from 'react';
 import SRI_LANKA_MAP from '../data/sriLankaDistricts';
 
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+
 const EMPTY_DISTRICT_DATA = {
   totalUnits: 0,
   status: 'Critical',
   bloodGroups: { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 }
 };
 
-const SriLankaMap = ({ availability, onDistrictSelect, selectedDistrict }) => {
+const SriLankaMap = ({ availability, onDistrictSelect, selectedDistrict, maxHeight = '540px' }) => {
   const [hovered, setHovered] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
@@ -55,7 +57,7 @@ const SriLankaMap = ({ availability, onDistrictSelect, selectedDistrict }) => {
   };
 
   const getBloodBreakdown = (info) => {
-    if (info?.bloodGroups) {
+    if (info && info.bloodGroups) {
       return info.bloodGroups;
     }
     return { 'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0 };
@@ -110,7 +112,7 @@ const SriLankaMap = ({ availability, onDistrictSelect, selectedDistrict }) => {
         viewBox="0 0 450 793"
         style={{
           width: '100%',
-          maxHeight: '370px',
+          maxHeight: maxHeight,
           filter: 'drop-shadow(0px 8px 20px rgba(0, 0, 0, 0.08))',
           overflow: 'visible'
         }}
@@ -197,22 +199,25 @@ const SriLankaMap = ({ availability, onDistrictSelect, selectedDistrict }) => {
             paddingTop: '6px',
             borderTop: '1px solid var(--border-color)'
           }}>
-            {tooltipBreakdown && Object.entries(tooltipBreakdown).map(([bg, count]) => (
-              <div 
-                key={bg}
-                style={{
-                  backgroundColor: 'var(--bg-secondary)',
-                  padding: '3px 2px',
-                  borderRadius: '4px',
-                  textAlign: 'center',
-                  fontSize: '0.68rem',
-                  border: count < 10 ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid transparent'
-                }}
-              >
-                <div style={{ fontWeight: 800, color: count < 10 ? '#ef4444' : '#e11d48', fontSize: '0.7rem' }}>{bg}</div>
-                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.72rem' }}>{count}</div>
-              </div>
-            ))}
+            {BLOOD_GROUPS.map((bg) => {
+              const count = tooltipBreakdown ? Number(tooltipBreakdown[bg] || 0) : 0;
+              return (
+                <div 
+                  key={bg}
+                  style={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    padding: '3px 2px',
+                    borderRadius: '4px',
+                    textAlign: 'center',
+                    fontSize: '0.68rem',
+                    border: count < 10 ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid transparent'
+                  }}
+                >
+                  <div style={{ fontWeight: 800, color: count < 10 ? '#ef4444' : '#e11d48', fontSize: '0.7rem' }}>{bg}</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.72rem' }}>{count}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -233,37 +238,40 @@ const SriLankaMap = ({ availability, onDistrictSelect, selectedDistrict }) => {
         transition: 'all 0.2s ease'
       }}>
         {activeDistrictInfo ? (
-          <>
+          <React.Fragment>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
               <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem' }}>
                 <strong>{currentDistrictName}</strong> District {hovered ? '(Hovered)' : ''}
               </div>
               <span className={`badge badge-${activeDistrictInfo.status === 'Good' ? 'success' : activeDistrictInfo.status === 'Low' ? 'warning' : 'danger'}`}>
-                {activeDistrictInfo.status} • Total: {activeDistrictInfo.totalUnits} Units
+                {activeDistrictInfo.status} &bull; Total: {activeDistrictInfo.totalUnits} Units
               </span>
             </div>
             {/* Blood group pills */}
             <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {activeBreakdown && Object.entries(activeBreakdown).map(([bg, count]) => (
-                <span 
-                  key={bg}
-                  style={{
-                    backgroundColor: 'var(--bg-card, #fff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '5px',
-                    padding: '2px 6px',
-                    fontSize: '0.7rem',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '3px'
-                  }}
-                >
-                  <strong style={{ color: count < 10 ? '#ef4444' : '#e11d48' }}>{bg}:</strong>
-                  <span style={{ fontWeight: 700 }}>{count}</span>
-                </span>
-              ))}
+              {BLOOD_GROUPS.map((bg) => {
+                const count = activeBreakdown ? Number(activeBreakdown[bg] || 0) : 0;
+                return (
+                  <span 
+                    key={bg}
+                    style={{
+                      backgroundColor: 'var(--bg-card, #fff)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '5px',
+                      padding: '2px 6px',
+                      fontSize: '0.7rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}
+                  >
+                    <strong style={{ color: count < 10 ? '#ef4444' : '#e11d48' }}>{bg}:</strong>
+                    <span style={{ fontWeight: 700 }}>{count}</span>
+                  </span>
+                );
+              })}
             </div>
-          </>
+          </React.Fragment>
         ) : (
           <div style={{ color: 'var(--text-secondary)', textAlign: 'center', width: '100%', fontSize: '0.76rem' }}>
             Select or hover over any district on the map to view all blood group stock details

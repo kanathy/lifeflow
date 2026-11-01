@@ -279,7 +279,7 @@ const Dashboard = ({ user }) => {
             </button>
           </div>
           <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <SriLankaMap availability={districtAvailability} onDistrictSelect={(dist) => navigate('/monitoring')} />
+            <SriLankaMap availability={districtAvailability} onDistrictSelect={(dist) => navigate('/monitoring')} maxHeight="340px" />
           </div>
         </div>
 
