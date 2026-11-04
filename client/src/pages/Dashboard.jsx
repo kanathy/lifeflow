@@ -285,23 +285,39 @@ const Dashboard = ({ user }) => {
 
         {/* Right: Blood Shortage Prediction */}
         <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div className="flex-between" style={{ marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Blood Shortage Prediction (7 Days)</h3>
-            <button onClick={() => navigate('/prediction')} style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div className="flex-between" style={{ marginBottom: '14px' }}>
+            <div>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Blood Shortage Prediction (Next Month)</h3>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                {stats?.nextMonthInfo?.fullName ? `${stats.nextMonthInfo.fullName} ${stats.nextMonthInfo.year}` : 'Next Month'} Forecast • AI Model
+              </span>
+            </div>
+            <button
+              onClick={() => navigate('/prediction#district-shortage-table', { state: { scrollTo: 'district-shortage-table' } })}
+              style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
+              title="View full all-district shortage forecast table"
+            >
               <span>Prediction</span>
               <ArrowRight size={12} />
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, justifyContent: 'space-between' }}>
             {predictions?.map((pred) => (
-              <div key={pred.district} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div key={pred.district} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div className="flex-between">
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{pred.district}</span>
-                  <span className={`badge badge-${pred.riskLevel === 'High Risk' ? 'danger' : pred.riskLevel === 'Medium Risk' ? 'warning' : 'success'}`}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{pred.district}</span>
+                    {pred.estimatedUnits !== undefined && (
+                      <span style={{ fontSize: '0.72rem', color: '#ef4444', fontWeight: 700 }}>
+                        {pred.estimatedUnits} Units Shortage
+                      </span>
+                    )}
+                  </div>
+                  <span className={`badge badge-${pred.riskLevel === 'High Risk' ? 'danger' : pred.riskLevel === 'Medium Risk' ? 'warning' : 'success'}`} style={{ fontSize: '0.65rem' }}>
                     {pred.riskLevel}
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ flex: 1 }} className="progress-bar-container">
                     <div
                       className="progress-bar-fill"
@@ -311,10 +327,35 @@ const Dashboard = ({ user }) => {
                       }}
                     />
                   </div>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, width: '30px', textAlign: 'right' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, width: '32px', textAlign: 'right' }}>
                     {pred.shortageRisk}%
                   </span>
                 </div>
+                {pred.breakdown && pred.breakdown.length > 0 ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '2px' }}>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Critical Shortage:</span>
+                    {pred.breakdown.slice(0, 3).map(b => (
+                      <span
+                        key={b.bg}
+                        style={{
+                          fontSize: '0.63rem',
+                          fontWeight: 700,
+                          color: '#e11d48',
+                          background: 'rgba(225, 29, 72, 0.08)',
+                          border: '1px solid rgba(225, 29, 72, 0.2)',
+                          borderRadius: '4px',
+                          padding: '1px 5px'
+                        }}
+                      >
+                        {b.bg}: {b.units} U
+                      </span>
+                    ))}
+                  </div>
+                ) : pred.topCriticalGroups ? (
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                    Critical Groups: <strong style={{ color: '#e11d48' }}>{pred.topCriticalGroups}</strong>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

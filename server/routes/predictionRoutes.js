@@ -1,11 +1,22 @@
 const express = require('express');
-const { getPredictions, recalculatePredictions, predictDisease, predictAccident, predictRainfall } = require('../controllers/predictionController');
+const {
+  getPredictions,
+  recalculatePredictions,
+  predictDisease,
+  predictAccident,
+  predictRainfall,
+  predictShortage,
+  getAllDistrictsNextMonthShortage
+} = require('../controllers/predictionController');
 const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Rainfall does not require auth (Prophet model — public forecast)
+// ML Model forecasts (rainfall & shortage models)
 router.post('/rainfall', predictRainfall);
+router.post('/shortage', predictShortage);
+router.get('/shortage/all-districts', getAllDistrictsNextMonthShortage);
+router.post('/shortage/all-districts', getAllDistrictsNextMonthShortage);
 
 router.use(protect);
 router.get('/', getPredictions);

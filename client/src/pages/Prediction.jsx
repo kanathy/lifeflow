@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, RefreshCw, Activity, Calendar, AlertTriangle, Droplet, Zap, ChevronRight, CloudRain, X, Search, Filter, Layers, MapPin } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { TrendingUp, RefreshCw, Activity, Calendar, AlertTriangle, Droplet, Zap, ChevronRight, ChevronDown, CloudRain, X, Search, Filter, Layers, MapPin } from 'lucide-react';
 
 // ─── Sri Lanka All 25 Districts Constant ─────────────────────────────────────
 const SRI_LANKA_DISTRICTS = [
@@ -776,7 +777,14 @@ const DISTRICT_RAINFALL = {
 
 // ─── Prophet AI Model Rainfall Forecast Helper ─────────────────────────────
 export const fetchProphetRainfall = async (district, month, year, token = '') => {
-  if (!district) return 114.0;
+  const base = DISTRICT_RAINFALL[district] || 114;
+  const monthlyFactors = {
+    1: 0.85, 2: 0.70, 3: 0.90, 4: 1.20, 5: 1.35, 6: 1.15,
+    7: 0.95, 8: 0.90, 9: 1.10, 10: 1.40, 11: 1.45, 12: 1.10
+  };
+  const seasonalFallback = Math.round(base * (monthlyFactors[Number(month)] || 1.0));
+  if (!district) return seasonalFallback;
+
   try {
     const res = await fetch('/api/predictions/rainfall', {
       method: 'POST',
@@ -788,18 +796,19 @@ export const fetchProphetRainfall = async (district, month, year, token = '') =>
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && typeof data.rainfall === 'number') {
-        return data.rainfall;
+      if (data && typeof data.rainfall === 'number' && data.rainfall > 10) {
+        return Math.round(data.rainfall);
       }
     }
   } catch (err) {
     console.error("Prophet rainfall fetch error:", err);
   }
-  return 114.0;
+  return seasonalFallback;
 };
 
 // ─── Main Prediction Page ─────────────────────────────────────────────────────
 const Prediction = ({ user }) => {
+  const location = useLocation();
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
@@ -809,6 +818,14 @@ const Prediction = ({ user }) => {
   const [accidentData, setAccidentData] = useState(null);
   const [shortageData, setShortageData] = useState(null);
   const [shortageList, setShortageList] = useState([]);
+
+  // All 25 Districts next month shortage forecast state
+  const [allDistrictsShortage, setAllDistrictsShortage] = useState([]);
+  const [loadingAllDistricts, setLoadingAllDistricts] = useState(true);
+  const [tableSearch, setTableSearch] = useState('');
+  const [highlightTable, setHighlightTable] = useState(false);
+  const [nextMonthMeta, setNextMonthMeta] = useState(null);
+  const [expandedDistrict, setExpandedDistrict] = useState(null);
 
   const [loadingDisease, setLoadingDisease] = useState(false);
   const [diseaseError, setDiseaseError] = useState('');
@@ -837,6 +854,8 @@ const Prediction = ({ user }) => {
 
   const [sMonth, setSMonth] = useState(currentMonth);
   const [sYear, setSYear] = useState(currentYear);
+  const [sDistrict, setSDistrict] = useState('Colombo');
+  const [sBloodGroup, setSBloodGroup] = useState('All');
 
   // Handlers to forecast rainfall using all_districts_prophet_models.pkl
   const updateDiseaseRainfall = async (dist, m, y) => {
@@ -1064,30 +1083,38 @@ const Prediction = ({ user }) => {
     setLoadingAccident(false);
   }, [aMonth, aYear, aDistrict, aBloodGroup, aRainfall, aFestival]);
 
-  // Fetch blood shortage predictions
+  // Fetch blood shortage predictions using Model 3 (model3_total_amount.pkl)
   const fetchShortage = useCallback(async () => {
     setLoadingShortage(true);
     try {
-      const res = await fetch('/api/predictions', { headers: authHeader });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setShortageList(data);
-        // Synthesize a shortage summary from top district
-        const topRisk = data.length ? Math.max(...data.map(d => d.shortageRisk)) : 80;
-        const topDistrict = data.find(d => d.shortageRisk === topRisk) || data[0];
-        const topTrend = topDistrict?.trend || [70, 72, 75, 78, 80, 82, 86];
+      const res = await fetch('/api/predictions/shortage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}) },
+        body: JSON.stringify({
+          district: sDistrict,
+          monthNumber: sMonth,
+          month: sMonth,
+          year: sYear,
+          bloodGroup: sBloodGroup
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
         setShortageData({
-          shortageRisk: topRisk,
-          riskLevel: topRisk > 70 ? 'High Risk' : topRisk >= 30 ? 'Medium Risk' : 'Low Risk',
-          trend: topTrend,
-          estimatedUnits: Math.round(topRisk * 1.86)
+          shortageExpected: data.shortageExpected || 'Yes',
+          shortageRisk: data.shortageRisk || 70,
+          riskLevel: data.riskLevel || 'Medium Risk',
+          estimatedUnits: data.estimatedUnits,
+          totalEstimatedUnits: data.totalEstimatedUnits ?? data.estimatedUnits,
+          trend: data.trend || [],
+          breakdown: data.breakdown || []
         });
       }
     } catch (e) {
       console.error('Shortage fetch error:', e);
     }
     setLoadingShortage(false);
-  }, [sMonth, sYear]);
+  }, [sMonth, sYear, sDistrict, sBloodGroup, user?.token]);
 
   // Fetch initial Prophet model rainfall on mount for default district (Colombo) and current month
   useEffect(() => {
@@ -1103,13 +1130,51 @@ const Prediction = ({ user }) => {
     fetchInitialWeather();
   }, []); // runs once on mount
 
+  // Fetch All 25 Districts Shortage Forecast for selected month & year
+  const fetchAllDistrictsShortage = useCallback(async (targetMonth = sMonth, targetYear = sYear) => {
+    setLoadingAllDistricts(true);
+    try {
+      const m = targetMonth || sMonth;
+      const y = targetYear || sYear;
+      const res = await fetch(`/api/predictions/shortage/all-districts?month=${m}&year=${y}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.predictions)) {
+          setAllDistrictsShortage(data.predictions);
+          setNextMonthMeta({ month: data.month, year: data.year, monthName: data.monthName });
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching all districts shortage:', e);
+    }
+    setLoadingAllDistricts(false);
+  }, [sMonth, sYear]);
+
+  useEffect(() => {
+    fetchAllDistrictsShortage(sMonth, sYear);
+  }, [fetchAllDistrictsShortage, sMonth, sYear]);
+
+  // Handle direct navigation scroll from Dashboard
+  useEffect(() => {
+    if (location.hash === '#district-shortage-table' || location.state?.scrollTo === 'district-shortage-table') {
+      setTimeout(() => {
+        const el = document.getElementById('district-shortage-table');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setHighlightTable(true);
+          setTimeout(() => setHighlightTable(false), 2600);
+        }
+      }, 350);
+    }
+  }, [location]);
+
   useEffect(() => { fetchDisease(); }, [fetchDisease]);
   useEffect(() => { fetchAccident(); }, [fetchAccident]);
   useEffect(() => { fetchShortage(); }, [fetchShortage]);
 
   const handleRecalculateAll = async () => {
     setUpdating(true);
-    await Promise.all([fetchDisease(), fetchAccident(), fetchShortage()]);
+    await Promise.all([fetchDisease(), fetchAccident(), fetchShortage(), fetchAllDistrictsShortage()]);
     setUpdating(false);
   };
 
@@ -1131,7 +1196,7 @@ const Prediction = ({ user }) => {
   const accidentTrendChart = chartFilter !== 'Disease' && chartFilter !== 'Blood Shortage'
     ? (accidentData?.trend || defaultAccidentTrend) : null;
   const shortageTrendChart = chartFilter !== 'Disease' && chartFilter !== 'Accident'
-    ? (shortageList.find(d => d.district === 'Colombo')?.trend || shortageData?.trend || defaultShortageTrend) : null;
+    ? (shortageData?.trend || defaultShortageTrend) : null;
 
   const cardStyle = {
     background: 'var(--bg-secondary)',
@@ -1438,6 +1503,42 @@ const Prediction = ({ user }) => {
 
           <MonthSelector month={sMonth} onMonthChange={setSMonth} year={sYear} onYearChange={setSYear} />
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+              District
+              <select
+                value={sDistrict}
+                onChange={e => setSDistrict(e.target.value)}
+                style={{ display: 'block', width: '100%', marginTop: '3px', fontSize: '0.72rem', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 6px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+              >
+                <option value="">Select district</option>
+                {SRI_LANKA_DISTRICTS.map(district => <option key={district}>{district}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+              Blood Group
+              <select
+                value={sBloodGroup}
+                onChange={e => setSBloodGroup(e.target.value)}
+                style={{ display: 'block', width: '100%', marginTop: '3px', fontSize: '0.72rem', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 6px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+              >
+                <option value="All">All Blood Groups</option>
+                {['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-'].map(group => <option key={group} value={group}>{group}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { fetchShortage(); fetchAllDistrictsShortage(sMonth, sYear); }}
+            disabled={!sDistrict || loadingShortage}
+            className="btn btn-primary"
+            style={{ alignSelf: 'flex-start', fontSize: '0.75rem', padding: '7px 12px', marginBottom: '8px', backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+          >
+            <RefreshCw size={13} className={loadingShortage ? 'animate-spin' : ''} />
+            {loadingShortage ? 'Calculating...' : 'Calculate Prediction'}
+          </button>
+
           {loadingShortage ? (
             <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Running shortage model...</div>
           ) : (
@@ -1467,26 +1568,31 @@ const Prediction = ({ user }) => {
 
               <MiniSparkline data={shortageData?.trend || []} color="#ef4444" width={220} height={50} />
 
-              {shortageList.length > 0 && (
-                <div style={{ marginTop: '10px' }}>
-                  <p style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: '8px' }}>At-Risk Blood Groups</p>
-                  {[
+              {(() => {
+                const breakdownList = (shortageData?.breakdown && shortageData.breakdown.length > 0)
+                  ? shortageData.breakdown
+                  : [
                     { bg: 'O+', units: 92, pct: 49.5 },
                     { bg: 'A+', units: 45, pct: 24.2 },
                     { bg: 'B+', units: 28, pct: 15.1 },
                     { bg: 'AB+', units: 13, pct: 7.0 },
                     { bg: 'O-', units: 8, pct: 4.3 },
-                  ].map(r => (
-                    <div key={r.bg} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, minWidth: '30px' }}>{r.bg}</span>
-                      <div style={{ flex: 1, height: '5px', borderRadius: '99px', background: 'var(--border-color)', overflow: 'hidden' }}>
-                        <div style={{ width: `${r.pct}%`, height: '100%', borderRadius: '99px', background: '#ef4444' }} />
+                  ];
+                return (
+                  <div style={{ marginTop: '10px' }}>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: '8px' }}>At-Risk Blood Groups</p>
+                    {breakdownList.slice(0, 5).map(r => (
+                      <div key={r.bg} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, minWidth: '30px' }}>{r.bg}</span>
+                        <div style={{ flex: 1, height: '5px', borderRadius: '99px', background: 'var(--border-color)', overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.min(100, r.pct)}%`, height: '100%', borderRadius: '99px', background: '#ef4444' }} />
+                        </div>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', minWidth: '80px', textAlign: 'right' }}>{r.units} Units ({r.pct}%)</span>
                       </div>
-                      <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', minWidth: '80px', textAlign: 'right' }}>{r.units} Units ({r.pct}%)</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                );
+              })()}
 
               <button onClick={fetchShortage} style={{ marginTop: '10px', fontSize: '0.78rem', color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', background: 'none', border: 'none' }}>
                 View Detailed Report <ChevronRight size={13} />
@@ -1544,55 +1650,303 @@ const Prediction = ({ user }) => {
         </div>
       </div>
 
-      {/* ── 7-Day Shortage Risk Summary ── */}
-      <div className="dashboard-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-color)' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>7-Day Shortage Risk Summary</h3>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Summary of blood shortage risk for districts for the selected date range</p>
+      {/* ── All 25 Districts Shortage Forecast Table ── */}
+      <div
+        id="district-shortage-table"
+        className="dashboard-card"
+        style={{
+          padding: 0,
+          overflow: 'hidden',
+          transition: 'box-shadow 0.4s ease, border-color 0.4s ease',
+          border: highlightTable ? '2px solid var(--color-primary)' : '1px solid var(--border-color)',
+          boxShadow: highlightTable ? '0 0 0 4px rgba(225, 29, 72, 0.25), 0 8px 24px rgba(225, 29, 72, 0.15)' : undefined
+        }}
+      >
+        <div style={{
+          padding: '16px 24px',
+          borderBottom: '1px solid var(--border-color)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+                District Shortage Forecast Summary ({nextMonthMeta?.monthName ? `${nextMonthMeta.monthName} ${nextMonthMeta.year}` : 'Forecast'})
+              </h3>
+              <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>
+                All 25 Districts
+              </span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '3px 0 0' }}>
+              {nextMonthMeta?.monthName ? `${nextMonthMeta.monthName} ${nextMonthMeta.year}` : 'Next Month'} Forecast • Predicted using Model 3 Pipeline (Accident + Disease + Prophet + Model 3)
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Search district */}
+            <div style={{ position: 'relative', width: '200px' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+              <input
+                type="text"
+                placeholder="Search district..."
+                value={tableSearch}
+                onChange={e => setTableSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px 6px 30px',
+                  fontSize: '0.75rem',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)'
+                }}
+              />
+              {tableSearch && (
+                <button
+                  onClick={() => setTableSearch('')}
+                  style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={fetchAllDistrictsShortage}
+              className="btn btn-secondary"
+              style={{ padding: '6px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+              title="Refresh all district shortage predictions"
+            >
+              <RefreshCw size={13} className={loadingAllDistricts ? 'animate-spin' : ''} />
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
 
-        {loadingShortage ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading prediction data...</div>
+        {loadingAllDistricts ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '0.82rem', margin: 0 }}>Running Model 3 across all 25 Sri Lanka districts...</p>
+          </div>
         ) : (
-          <div className="table-container" style={{ margin: 0, border: 'none' }}>
-            <table className="custom-table">
+          <div className="table-container" style={{ margin: 0, border: 'none', maxHeight: '420px', overflowY: 'auto' }}>
+            <table className="custom-table" style={{ width: '100%' }}>
               <thead>
-                <tr>
+                <tr style={{ position: 'sticky', top: 0, background: 'var(--bg-primary)', zIndex: 1 }}>
                   <th>District Location</th>
+                  <th>Estimated Shortage</th>
                   <th>Risk Rate (%)</th>
                   <th>Warning Grade</th>
-                  <th>Current Stock Status</th>
+                  <th>Critical Blood Groups (Shortage Units)</th>
                   <th>Prediction Metric Status</th>
                 </tr>
               </thead>
               <tbody>
-                {shortageList.map(p => (
-                  <tr key={p.district}>
-                    <td style={{ fontWeight: 700 }}>{p.district}</td>
-                    <td style={{ fontWeight: 800 }}>{p.shortageRisk}%</td>
-                    <td>
-                      <span className={`badge badge-${p.riskLevel === 'High Risk' ? 'danger' : p.riskLevel === 'Medium Risk' ? 'warning' : 'success'}`}>
-                        {p.riskLevel}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div className="progress-bar-container" style={{ width: '80px', height: '6px' }}>
-                          <div className="progress-bar-fill" style={{
-                            width: `${p.shortageRisk}%`, height: '100%',
-                            backgroundColor: p.riskLevel === 'High Risk' ? 'var(--color-danger)' : p.riskLevel === 'Medium Risk' ? 'var(--color-warning)' : 'var(--color-success)'
-                          }} />
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: p.riskLevel === 'High Risk' ? 'var(--color-danger)' : 'var(--text-secondary)' }}>
-                        <Activity size={14} />
-                        <span>{p.riskLevel === 'High Risk' ? 'Action required - low reserves predicted' : 'Stable levels predicted'}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  const list = (allDistrictsShortage.length > 0 ? allDistrictsShortage : shortageList)
+                    .filter(p => !tableSearch || p.district.toLowerCase().includes(tableSearch.toLowerCase()));
+
+                  if (!list.length) {
+                    return (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                          No district records found matching &quot;{tableSearch}&quot;.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return list.map((p, idx) => (
+                    <React.Fragment key={p.district}>
+                      <tr style={{ backgroundColor: expandedDistrict === p.district ? 'rgba(225, 29, 72, 0.03)' : undefined }}>
+                        <td style={{ fontWeight: 700 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', width: '18px' }}>#{idx + 1}</span>
+                            <MapPin size={13} color="var(--color-primary)" />
+                            <span>{p.district}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span style={{ color: '#ef4444', fontWeight: 800, fontSize: '0.85rem' }}>
+                            {p.estimatedUnits ?? '—'} Units
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 800 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="progress-bar-container" style={{ width: '70px', height: '6px' }}>
+                              <div className="progress-bar-fill" style={{
+                                width: `${p.shortageRisk}%`,
+                                backgroundColor: p.riskLevel === 'High Risk' ? 'var(--color-danger)' : p.riskLevel === 'Medium Risk' ? 'var(--color-warning)' : 'var(--color-success)'
+                              }} />
+                            </div>
+                            <span>{p.shortageRisk}%</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`badge badge-${p.riskLevel === 'High Risk' ? 'danger' : p.riskLevel === 'Medium Risk' ? 'warning' : 'success'}`} style={{ fontSize: '0.68rem' }}>
+                            {p.riskLevel}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center' }}>
+                              {(() => {
+                                const fallbackMap = { 'O+': 0.35, 'A+': 0.28, 'B-': 0.18 };
+                                const groupsToShow = (p.breakdown && p.breakdown.length > 0)
+                                  ? p.breakdown.slice(0, 3)
+                                  : [
+                                      { bg: 'O+', units: Math.round((p.estimatedUnits || 100) * 0.35) },
+                                      { bg: 'A+', units: Math.round((p.estimatedUnits || 100) * 0.28) },
+                                      { bg: 'B-', units: Math.round((p.estimatedUnits || 100) * 0.18) }
+                                    ];
+
+                                return groupsToShow.map(b => (
+                                  <span
+                                    key={b.bg}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '2px 7px',
+                                      borderRadius: '6px',
+                                      backgroundColor: 'rgba(239, 68, 68, 0.09)',
+                                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      color: '#ef4444'
+                                    }}
+                                  >
+                                    <span style={{ color: '#be123c' }}>{b.bg}:</span>
+                                    <strong style={{ color: '#e11d48' }}>{b.units} Units</strong>
+                                  </span>
+                                ));
+                              })()}
+
+                              <button
+                                type="button"
+                                onClick={() => setExpandedDistrict(prev => prev === p.district ? null : p.district)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  padding: '2px 7px',
+                                  borderRadius: '5px',
+                                  fontSize: '0.67rem',
+                                  fontWeight: 700,
+                                  border: '1px solid var(--border-color)',
+                                  backgroundColor: expandedDistrict === p.district ? 'var(--color-primary)' : 'var(--bg-secondary)',
+                                  color: expandedDistrict === p.district ? '#fff' : 'var(--text-secondary)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                title="Toggle all 8 blood groups shortage breakdown"
+                              >
+                                <span>{expandedDistrict === p.district ? 'Hide' : '+ All 8 Groups'}</span>
+                                <ChevronDown
+                                  size={11}
+                                  style={{
+                                    transform: expandedDistrict === p.district ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s ease'
+                                  }}
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: p.riskLevel === 'High Risk' ? 'var(--color-danger)' : 'var(--text-secondary)' }}>
+                            <Activity size={13} />
+                            <span>{p.metricStatus || (p.riskLevel === 'High Risk' ? 'Action required - critical shortage predicted' : 'Stable levels predicted')}</span>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Expandable subrow showing all 8 blood groups shortage cards */}
+                      {expandedDistrict === p.district && (
+                        <tr style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                          <td colSpan={6} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <MapPin size={14} color="var(--color-primary)" />
+                                  <strong style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                                    {p.district} — Blood Group Shortage Breakdown ({nextMonthMeta?.monthName || 'Next Month'} Forecast)
+                                  </strong>
+                                </div>
+                                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                                  Total Predicted Shortage: <strong style={{ color: '#ef4444', fontSize: '0.85rem' }}>{p.estimatedUnits} Units</strong>
+                                </span>
+                              </div>
+
+                              {/* 8 Blood Groups Grid - matching District Details card layout */}
+                              <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(95px, 1fr))',
+                                gap: '8px'
+                              }}>
+                                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => {
+                                  const item = p.breakdown?.find(b => b.bg === bg);
+                                  const fallbackMap = { 'O+': 0.35, 'A+': 0.28, 'B+': 0.18, 'AB+': 0.08, 'O-': 0.045, 'A-': 0.035, 'B-': 0.02, 'AB-': 0.01 };
+                                  const units = item ? item.units : Math.max(1, Math.round((p.estimatedUnits || 100) * (fallbackMap[bg] || 0.1)));
+                                  const pct = item ? item.pct : Math.round((units / (p.estimatedUnits || 100)) * 100);
+                                  const isCritical = units >= 35 || pct >= 20;
+                                  const isMedium = units >= 15 || pct >= 10;
+                                  const statusColor = isCritical ? '#ef4444' : isMedium ? '#f59e0b' : '#10b981';
+                                  const statusBg = isCritical ? 'rgba(239, 68, 68, 0.08)' : isMedium ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16, 185, 129, 0.08)';
+                                  const statusBorder = isCritical ? 'rgba(239, 68, 68, 0.25)' : isMedium ? 'rgba(245, 158, 11, 0.25)' : 'rgba(16, 185, 129, 0.25)';
+                                  const statusLabel = isCritical ? 'Critical' : isMedium ? 'Moderate' : 'Low';
+
+                                  return (
+                                    <div
+                                      key={bg}
+                                      style={{
+                                        backgroundColor: statusBg,
+                                        border: `1px solid ${statusBorder}`,
+                                        borderRadius: '8px',
+                                        padding: '8px 6px',
+                                        textAlign: 'center',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '2px'
+                                      }}
+                                    >
+                                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: statusColor }}>
+                                        {bg}
+                                      </span>
+                                      <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                                        {units}
+                                      </span>
+                                      <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>
+                                        Units ({pct}%)
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: '0.58rem',
+                                          fontWeight: 700,
+                                          color: statusColor,
+                                          marginTop: '3px',
+                                          padding: '1px 5px',
+                                          borderRadius: '4px',
+                                          background: 'rgba(255,255,255,0.7)'
+                                        }}
+                                      >
+                                        {statusLabel}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
