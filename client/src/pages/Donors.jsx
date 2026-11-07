@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle, CheckCircle, Eye } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Calendar, Edit2, Trash2, X, AlertTriangle, CheckCircle, Eye, Send, CheckSquare, Square, Users, Sparkles, Filter, ChevronRight, Check } from 'lucide-react';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
@@ -10,6 +10,19 @@ const Donors = ({ user }) => {
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
+
+  // Bulk shortage email outreach states
+  const [selectedDonorIds, setSelectedDonorIds] = useState([]);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [shortageSummary, setShortageSummary] = useState([
+    { bg: 'O+', label: 'High Shortage (Critical)', units: 148 },
+    { bg: 'A+', label: 'High Shortage', units: 119 },
+    { bg: 'B-', label: 'Moderate Reserve', units: 85 },
+    { bg: 'AB-', label: 'Critical Shortage', units: 42 }
+  ]);
 
   // Delete modal states
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -190,6 +203,119 @@ const Donors = ({ user }) => {
       });
   };
 
+  // ─── Bulk Shortage Email Handlers ──────────────────────────────────────────
+  const generateEmailTemplate = (bg = 'Selected Blood Group', count = 0) => {
+    return `Dear Volunteer Donor,
+
+This is an urgent emergency blood donation appeal from the National Blood Transfusion Service / LifeFlow Sri Lanka.
+
+Our hospital network is currently experiencing a critical shortage of ${bg} blood group reserves. As a registered active donor with blood group ${bg}, your timely donation can save emergency patients, surgical cases, and accident victims today.
+
+• Blood Group Needed: ${bg}
+• Priority Level: CRITICAL EMERGENCY SHORTAGE APPEAL
+• Coordinating Center: LifeFlow Regional Blood Bank Network
+• Operating Hours: 8:00 AM – 6:00 PM (Daily)
+
+If you are currently in good health and have not donated blood in the last 3-4 months, please visit your nearest hospital blood bank center at your earliest convenience.
+
+Every single drop counts. Together, we can save lives.
+
+Emergency Dispatch Hotline: +94 11 269 1111 / LifeFlow Support
+Thank you for your noble commitment to saving lives!
+
+LifeFlow Blood Bank Emergency Coordination Team`;
+  };
+
+  const handleSelectShortageGroup = (bg) => {
+    setFilterGroup(bg);
+    const matchingIds = donors
+      .filter(d => d.bloodGroup === bg && d.status === 'Active')
+      .map(d => d._id);
+    setSelectedDonorIds(matchingIds);
+    setEmailSubject(`[URGENT] Critical ${bg} Blood Shortage Appeal - LifeFlow Emergency Dispatch`);
+    setEmailMessage(generateEmailTemplate(bg, matchingIds.length));
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedDonorIds.length === filteredDonors.length && filteredDonors.length > 0) {
+      setSelectedDonorIds([]);
+    } else {
+      setSelectedDonorIds(filteredDonors.map(d => d._id));
+    }
+  };
+
+  const handleToggleDonorSelect = (id) => {
+    setSelectedDonorIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleOpenBulkEmailModal = () => {
+    if (selectedDonorIds.length === 0) {
+      setFeedbackMsg('Please select at least one donor to send an emergency shortage email.');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+      return;
+    }
+    const targetGroup = filterGroup || 'Urgent Shortage';
+    if (!emailSubject) {
+      setEmailSubject(`[URGENT] Critical ${targetGroup} Blood Shortage Appeal - LifeFlow Emergency Dispatch`);
+    }
+    if (!emailMessage) {
+      setEmailMessage(generateEmailTemplate(targetGroup, selectedDonorIds.length));
+    }
+    setEmailModalOpen(true);
+  };
+
+  const handleSendBulkEmail = async () => {
+    if (!emailSubject || !emailMessage) {
+      setFeedbackMsg('Error: Please provide both an email subject and message body.');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const res = await fetch('/api/donors/bulk-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user?.token || ''}`
+        },
+        body: JSON.stringify({
+          donorIds: selectedDonorIds,
+          bloodGroup: filterGroup || 'Mixed',
+          subject: emailSubject,
+          message: emailMessage
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to dispatch emails');
+
+      setEmailModalOpen(false);
+      setFeedbackMsg(`Emergency shortage appeal email sent successfully to ${data.recipientCount} donor(s)!`);
+      setSelectedDonorIds([]);
+      setTimeout(() => setFeedbackMsg(''), 5000);
+    } catch (err) {
+      console.error(err);
+      setFeedbackMsg(`Error: ${err.message}`);
+      setTimeout(() => setFeedbackMsg(''), 4000);
+    }
+    setSendingEmail(false);
+  };
+
+  const handleOpenLocalEmail = () => {
+    const selectedDonorsList = donors.filter(d => selectedDonorIds.includes(d._id));
+    const emails = selectedDonorsList.map(d => d.email).filter(Boolean);
+    if (!emails.length) {
+      setFeedbackMsg('Error: None of the selected donors have email addresses.');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+      return;
+    }
+    const mailtoUrl = `mailto:?bcc=${encodeURIComponent(emails.join(','))}&subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailMessage)}`;
+    window.open(mailtoUrl, '_blank');
+  };
+
   // Metrics calculations
   const totalCount = donors.length;
   const activeCount = donors.filter(d => d.status === 'Active').length;
@@ -272,6 +398,137 @@ const Donors = ({ user }) => {
         </div>
       </div>
 
+      {/* Emergency Blood Shortage Outreach & Bulk Dispatch Panel (Admin Only) */}
+      {isAdmin && (
+        <div className="dashboard-card" style={{
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(244, 63, 94, 0.08))',
+          border: '1.5px solid rgba(239, 68, 68, 0.25)',
+          padding: '18px 22px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          boxShadow: '0 4px 16px rgba(239, 68, 68, 0.06)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #ef4444, #e11d48)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+              }}>
+                <AlertTriangle size={19} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+                    Blood Shortage Donor Outreach & Bulk Email
+                  </h3>
+                  <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>
+                    Admin Feature
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '3px 0 0' }}>
+                  Check blood shortages, filter eligible donors by blood group, and dispatch urgent donation appeals in bulk
+                </p>
+              </div>
+            </div>
+
+            {selectedDonorIds.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleOpenBulkEmailModal}
+                style={{
+                  backgroundColor: '#ef4444',
+                  borderColor: '#ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.8rem',
+                  padding: '8px 16px',
+                  fontWeight: 700,
+                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)'
+                }}
+              >
+                <Send size={14} />
+                <span>Dispatch Bulk Email ({selectedDonorIds.length} Donors)</span>
+              </button>
+            )}
+          </div>
+
+          {/* Quick Filter Critical Shortage Blood Groups */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', paddingTop: '4px' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Sparkles size={13} color="#ef4444" />
+              <span>Target Shortage Groups:</span>
+            </span>
+
+            {['O+', 'A+', 'B-', 'AB-', 'A-', 'B+'].map(bg => {
+              const isSelected = filterGroup === bg;
+              const matchingCount = donors.filter(d => d.bloodGroup === bg && d.status === 'Active').length;
+              return (
+                <button
+                  key={bg}
+                  type="button"
+                  onClick={() => handleSelectShortageGroup(bg)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '7px',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease',
+                    border: isSelected ? '1.5px solid #ef4444' : '1px solid rgba(239, 68, 68, 0.25)',
+                    backgroundColor: isSelected ? '#ef4444' : 'rgba(239, 68, 68, 0.08)',
+                    color: isSelected ? '#ffffff' : '#b91c1c'
+                  }}
+                  title={`Filter active donors with blood group ${bg} and auto-select for bulk email`}
+                >
+                  <span>{bg}</span>
+                  <span style={{
+                    fontSize: '0.65rem',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(239, 68, 68, 0.15)',
+                    color: isSelected ? '#fff' : '#ef4444'
+                  }}>
+                    {matchingCount} active
+                  </span>
+                </button>
+              );
+            })}
+
+            {filterGroup && (
+              <button
+                type="button"
+                onClick={() => { setFilterGroup(''); setSelectedDonorIds([]); }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Clear Filter
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Search Filter Panel */}
       <div className="dashboard-card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '12px' }} className="flex-column-responsive">
@@ -309,6 +566,17 @@ const Donors = ({ user }) => {
             <table className="custom-table" style={{ width: '100%', minWidth: '950px', tableLayout: 'auto' }}>
               <thead>
                 <tr>
+                  {isAdmin && (
+                    <th style={{ width: '42px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={filteredDonors.length > 0 && selectedDonorIds.length === filteredDonors.length}
+                        onChange={handleToggleSelectAll}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
+                        title="Select/Deselect all filtered donors"
+                      />
+                    </th>
+                  )}
                   <th>Donor</th>
                   <th>Blood Group</th>
                   <th>Contact Details</th>
@@ -319,8 +587,20 @@ const Donors = ({ user }) => {
                 </tr>
               </thead>
               <tbody>
-                {filteredDonors.map((item) => (
-                  <tr key={item._id}>
+                {filteredDonors.map((item) => {
+                  const isSelected = selectedDonorIds.includes(item._id);
+                  return (
+                  <tr key={item._id} style={{ backgroundColor: isSelected ? 'rgba(239, 68, 68, 0.04)' : undefined }}>
+                    {isAdmin && (
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleDonorSelect(item._id)}
+                          style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: 'var(--color-primary)' }}
+                        />
+                      </td>
+                    )}
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <img
@@ -413,7 +693,8 @@ const Donors = ({ user }) => {
                       )}
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>
@@ -559,6 +840,247 @@ const Donors = ({ user }) => {
         }}
         loading={deleting}
       />
+
+      {/* ── Floating Bulk Action Bar ── */}
+      {isAdmin && selectedDonorIds.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 999,
+          backgroundColor: 'var(--bg-primary)',
+          border: '1.5px solid var(--color-primary)',
+          borderRadius: '14px',
+          padding: '10px 22px',
+          boxShadow: '0 12px 30px rgba(0, 0, 0, 0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          animation: 'slideUp 0.25s ease-out'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--color-primary)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.74rem',
+              fontWeight: 800
+            }}>
+              {selectedDonorIds.length}
+            </div>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              Donors Selected {filterGroup ? `(${filterGroup})` : ''}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleOpenBulkEmailModal}
+              style={{
+                padding: '7px 16px',
+                fontSize: '0.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 700,
+                backgroundColor: '#ef4444',
+                borderColor: '#ef4444'
+              }}
+            >
+              <Send size={13} />
+              <span>Send Bulk Shortage Email</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setSelectedDonorIds([])}
+              style={{ padding: '7px 12px', fontSize: '0.8rem' }}
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Shortage Email Modal ── */}
+      {emailModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px',
+          animation: 'fadeIn var(--transition-fast)'
+        }}
+        onClick={(e) => { if (e.target === e.currentTarget) setEmailModalOpen(false); }}
+        >
+          <div className="dashboard-card animate-scale-up" style={{ width: '100%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', padding: '24px' }}>
+            <button
+              onClick={() => setEmailModalOpen(false)}
+              style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: 'var(--text-light)', cursor: 'pointer' }}
+            >
+              <X size={20} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px', borderBottom: '1px solid var(--border-color)', paddingBottom: '14px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #ef4444, #e11d48)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+              }}>
+                <Send size={20} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>
+                  Emergency Shortage Appeal (Bulk Email)
+                </h3>
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '3px 0 0' }}>
+                  Dispatch targeted blood donation appeal to {selectedDonorIds.length} volunteer donors
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleSendBulkEmail(); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Target summary badge */}
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: '10px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Users size={16} color="#ef4444" />
+                    <strong style={{ fontSize: '0.82rem', color: '#b91c1c' }}>
+                      Target Recipients: {selectedDonorIds.length} Active Donors
+                    </strong>
+                  </div>
+                  {filterGroup && (
+                    <span className="badge badge-danger" style={{ fontSize: '0.7rem' }}>
+                      Blood Group: {filterGroup}
+                    </span>
+                  )}
+                </div>
+
+                {/* Recipient names preview */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', maxHeight: '60px', overflowY: 'auto' }}>
+                  {donors.filter(d => selectedDonorIds.includes(d._id)).slice(0, 8).map(d => (
+                    <span key={d._id} style={{
+                      fontSize: '0.68rem',
+                      padding: '2px 7px',
+                      borderRadius: '5px',
+                      background: 'rgba(255,255,255,0.7)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      fontWeight: 600
+                    }}>
+                      {d.name} ({d.bloodGroup} · {d.district})
+                    </span>
+                  ))}
+                  {selectedDonorIds.length > 8 && (
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', alignSelf: 'center', fontWeight: 600 }}>
+                      +{selectedDonorIds.length - 8} more donors
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Subject */}
+              <div className="form-group">
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                  Email Subject Line
+                </label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="form-control"
+                  placeholder="e.g. [URGENT] Critical Blood Shortage Appeal - LifeFlow"
+                  required
+                  style={{ fontSize: '0.82rem', fontWeight: 600 }}
+                />
+              </div>
+
+              {/* Message Body */}
+              <div className="form-group">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                    Emergency Appeal Message Content
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setEmailMessage(generateEmailTemplate(filterGroup || 'Urgent Shortage', selectedDonorIds.length))}
+                    style={{ fontSize: '0.68rem', color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Reset Template
+                  </button>
+                </div>
+                <textarea
+                  rows={9}
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  className="form-control"
+                  required
+                  style={{ fontSize: '0.78rem', lineHeight: 1.5, fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handleOpenLocalEmail}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  title="Open default email client (Gmail / Outlook) with all recipient emails in BCC"
+                >
+                  <Mail size={13} />
+                  <span>Open in Mail App (BCC)</span>
+                </button>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setEmailModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={sendingEmail}
+                    style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
+                  >
+                    <Send size={14} className={sendingEmail ? 'animate-spin' : ''} />
+                    <span>{sendingEmail ? 'Dispatching...' : `Send to ${selectedDonorIds.length} Donors`}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
