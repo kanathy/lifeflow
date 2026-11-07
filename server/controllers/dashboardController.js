@@ -26,33 +26,133 @@ const getDashboardStats = async (req, res) => {
     const notifications = await dbResolver.find('Notification');
     const predictions = await dbResolver.find('Prediction');
 
+    // 0. Detect user role: Administrator sees national data, Hospital user sees their own hospital's data
+    let isHospitalUser = false;
+    let userHospitalName = '';
+    let userHospitalDistrict = '';
+    let userHospitalType = 'Government';
+
+    if (req.user && req.user.role !== 'Administrator') {
+      isHospitalUser = true;
+
+      let hospitalDoc = null;
+      if (req.user.hospitalId) {
+        hospitalDoc = await dbResolver.findOne('Hospital', { hospitalId: req.user.hospitalId });
+      }
+      if (!hospitalDoc && req.user.name) {
+        hospitalDoc = await dbResolver.findOne('Hospital', { name: new RegExp(`^${req.user.name.trim()}$`, 'i') });
+      }
+      if (!hospitalDoc && req.user.name) {
+        const cleanName = req.user.name.replace(/hospital/i, '').trim();
+        if (cleanName) {
+          hospitalDoc = await dbResolver.findOne('Hospital', { name: new RegExp(cleanName, 'i') });
+        }
+      }
+
+      userHospitalName = hospitalDoc ? hospitalDoc.name : (req.user.hospitalName || req.user.name || '');
+      userHospitalDistrict = hospitalDoc ? hospitalDoc.district : (req.user.hospitalDistrict || '');
+      userHospitalType = hospitalDoc ? hospitalDoc.type : 'Government';
+
+      // Fallback if district not found: search stock for matching hospital
+      if (!userHospitalDistrict && userHospitalName) {
+        const sMatch = stock.find(s => s.hospitalName && s.hospitalName.toLowerCase() === userHospitalName.toLowerCase());
+        if (sMatch && sMatch.district) {
+          userHospitalDistrict = sMatch.district;
+        }
+      }
+    }
+
+    // Helper to match an item to the current hospital user
+    const matchesHospital = (item, hospName) => {
+      if (!hospName) return false;
+      const h = (item.hospitalName || item.hospital || '').trim().toLowerCase();
+      const target = hospName.toLowerCase();
+      return h === target || (h && (h.includes(target) || target.includes(h)));
+    };
+
+    let hospitalStock = [];
+    if (isHospitalUser) {
+      hospitalStock = stock.filter(item => {
+        if (matchesHospital(item, userHospitalName)) return true;
+        if (userHospitalDistrict && item.district && item.district.toLowerCase() === userHospitalDistrict.toLowerCase()) {
+          const h = (item.hospitalName || item.hospital || '').trim();
+          if (!h || matchesHospital(item, userHospitalName)) return true;
+        }
+        return false;
+      });
+
+      // If no inventory found by name, fallback to district stock
+      if (hospitalStock.length === 0 && userHospitalDistrict) {
+        hospitalStock = stock.filter(item => item.district && item.district.toLowerCase() === userHospitalDistrict.toLowerCase());
+      }
+    }
+
+    const currentStock = isHospitalUser ? hospitalStock : stock;
+
     // 1. Calculations for Stat Cards
-    const totalBloodUnits = stock.reduce((acc, curr) => acc + curr.availableUnits, 0);
-    const activeDonors = donors.filter(d => d.status === 'Active').length;
-    const registeredHospitals = hospitals.length;
-    const emergencyRequests = requests.filter(r => r.status === 'Pending' || r.status === 'Accepted').length;
+    const totalBloodUnits = currentStock.reduce((acc, curr) => acc + (Number(curr.availableUnits) || 0), 0);
 
-    // Expiring soon: inventory items where expiryDays <= 7
-    const expiringSoonUnits = stock
+    // Active donors: for hospital user, count active donors in hospital's district
+    let activeDonors = 0;
+    if (isHospitalUser && userHospitalDistrict) {
+      const distDonors = donors.filter(d =>
+        d.district && d.district.toLowerCase() === userHospitalDistrict.toLowerCase() && d.status === 'Active'
+      );
+      activeDonors = distDonors.length;
+    } else {
+      activeDonors = donors.filter(d => d.status === 'Active').length;
+    }
+
+    // Registered Hospitals card: for hospital user, show their facility info
+    const registeredHospitals = isHospitalUser ? 1 : hospitals.length;
+    const hospitalFacility = isHospitalUser
+      ? (userHospitalType ? `${userHospitalType} Center` : 'Active Center')
+      : `${hospitals.length} Centers`;
+
+    // Emergency requests: for hospital user, show requests involving their hospital or district
+    let emergencyRequests = 0;
+    if (isHospitalUser) {
+      const hospRequests = requests.filter(r => {
+        const isPendingOrAccepted = r.status === 'Pending' || r.status === 'Accepted';
+        if (!isPendingOrAccepted) return false;
+        const hTarget = (userHospitalName || '').toLowerCase();
+        const rHosp = (r.hospital || '').toLowerCase();
+        const rReqHosp = (r.requesterHospital || '').toLowerCase();
+        const matchName = hTarget && (rHosp.includes(hTarget) || hTarget.includes(rHosp) || rReqHosp.includes(hTarget) || hTarget.includes(rReqHosp));
+        const matchDist = userHospitalDistrict && r.district && r.district.toLowerCase() === userHospitalDistrict.toLowerCase();
+        return matchName || matchDist;
+      });
+      emergencyRequests = hospRequests.length;
+    } else {
+      emergencyRequests = requests.filter(r => r.status === 'Pending' || r.status === 'Accepted').length;
+    }
+
+    // Expiring soon: inventory items where expiryDays <= 7 (hospital stock or national stock)
+    const expiringSoonUnits = currentStock
       .filter(item => item.expiryDays <= 7)
-      .reduce((acc, curr) => acc + curr.availableUnits, 0);
-
-    // Critical Shortages: Count of districts with sum of blood < 200 units
-    const districtGroups = {};
-    stock.forEach(item => {
-      districtGroups[item.district] = (districtGroups[item.district] || 0) + item.availableUnits;
-    });
-    const criticalShortages = Object.keys(districtGroups).filter(d => districtGroups[d] < 200).length;
+      .reduce((acc, curr) => acc + (Number(curr.availableUnits) || 0), 0);
 
     // 2. Blood Stock by Blood Group chart
     const bloodGroupStock = {
       'A+': 0, 'A-': 0, 'B+': 0, 'B-': 0, 'O+': 0, 'O-': 0, 'AB+': 0, 'AB-': 0
     };
-    stock.forEach(item => {
+    currentStock.forEach(item => {
       if (bloodGroupStock[item.bloodGroup] !== undefined) {
-        bloodGroupStock[item.bloodGroup] += item.availableUnits;
+        bloodGroupStock[item.bloodGroup] += (Number(item.availableUnits) || 0);
       }
     });
+
+    // Critical Shortages: For hospital, count blood groups with < 30 units; for admin, count districts with < 200 units
+    let criticalShortages = 0;
+    if (isHospitalUser) {
+      criticalShortages = Object.keys(bloodGroupStock).filter(bg => bloodGroupStock[bg] < 30).length;
+    } else {
+      const districtGroups = {};
+      stock.forEach(item => {
+        districtGroups[item.district] = (districtGroups[item.district] || 0) + item.availableUnits;
+      });
+      criticalShortages = Object.keys(districtGroups).filter(d => districtGroups[d] < 200).length;
+    }
 
     // 3. District-wise Availability for Map & Monitoring
     // We categorize each district: Good (>300 units), Low (100 - 300 units), Critical (<100 units)
@@ -124,11 +224,26 @@ const getDashboardStats = async (req, res) => {
     ];
 
     // 5. Recent lists (sorted, sliced)
-    const recentRequests = [...requests]
+    const hospitalRequestsList = isHospitalUser
+      ? requests.filter(r => {
+          const hTarget = (userHospitalName || '').toLowerCase();
+          const rHosp = (r.hospital || '').toLowerCase();
+          const rReqHosp = (r.requesterHospital || '').toLowerCase();
+          const matchName = hTarget && (rHosp.includes(hTarget) || hTarget.includes(rHosp) || rReqHosp.includes(hTarget) || hTarget.includes(rReqHosp));
+          const matchDist = userHospitalDistrict && r.district && r.district.toLowerCase() === userHospitalDistrict.toLowerCase();
+          return matchName || matchDist;
+        })
+      : requests;
+
+    const recentRequests = [...(hospitalRequestsList.length > 0 ? hospitalRequestsList : requests)]
       .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt))
       .slice(0, 5);
 
-    const recentDonations = [...donors]
+    const hospitalDonationsList = (isHospitalUser && userHospitalDistrict)
+      ? donors.filter(d => d.district && d.district.toLowerCase() === userHospitalDistrict.toLowerCase())
+      : donors;
+
+    const recentDonations = [...(hospitalDonationsList.length > 0 ? hospitalDonationsList : donors)]
       .sort((a, b) => new Date(b.lastDonationDate) - new Date(a.lastDonationDate))
       .slice(0, 5);
 
@@ -225,11 +340,23 @@ const getDashboardStats = async (req, res) => {
     // Sort by highest estimated shortage first
     nextMonthPredictions.sort((a, b) => b.estimatedUnits - a.estimatedUnits);
 
+    // If hospital user, ensure their district appears at the top of the prediction card
+    if (isHospitalUser && userHospitalDistrict) {
+      const distIdx = nextMonthPredictions.findIndex(
+        p => p.district && p.district.toLowerCase() === userHospitalDistrict.toLowerCase()
+      );
+      if (distIdx > 0) {
+        const [targetDistPred] = nextMonthPredictions.splice(distIdx, 1);
+        nextMonthPredictions.unshift(targetDistPred);
+      }
+    }
+
     res.json({
       cards: {
         totalBloodUnits,
         activeDonors,
         registeredHospitals,
+        hospitalFacility,
         emergencyRequests,
         expiringSoon: expiringSoonUnits,
         criticalShortages
@@ -246,7 +373,11 @@ const getDashboardStats = async (req, res) => {
       monthlyOverview,
       recentRequests,
       recentDonations,
-      unreadNotifications
+      unreadNotifications,
+      isHospitalView: isHospitalUser,
+      hospitalName: userHospitalName,
+      hospitalDistrict: userHospitalDistrict,
+      hospitalType: userHospitalType
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

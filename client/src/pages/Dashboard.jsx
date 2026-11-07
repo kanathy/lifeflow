@@ -59,6 +59,10 @@ const Dashboard = ({ user }) => {
 
   const { cards, bloodGroupStock, districtAvailability: rawAvailability, predictions, monthlyOverview, recentRequests, recentDonations } = stats || {};
 
+  const isHospital = user?.role === 'Hospital' || user?.role === 'Hospital Staff' || (user?.role !== 'Administrator' && (user?.hospitalId || stats?.isHospitalView));
+  const hospName = stats?.hospitalName || user?.hospitalName || user?.name;
+  const hospDistrict = stats?.hospitalDistrict || user?.hospitalDistrict || '';
+
   const ALL_25_DISTRICTS = [
     'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
     'Galle', 'Matara', 'Hambantota', 'Jaffna', 'Kilinochchi', 'Mannar',
@@ -143,7 +147,11 @@ const Dashboard = ({ user }) => {
       <div className="flex-between">
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Outfit' }}>Analytics Overview</h1>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Sri Lanka blood reserve network statistics</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            {isHospital
+              ? `${hospName} reserve & emergency overview (${hospDistrict ? `${hospDistrict} District` : 'Hospital Facility'})`
+              : 'Sri Lanka blood reserve network statistics'}
+          </p>
         </div>
         <button
           onClick={fetchStats}
@@ -164,9 +172,13 @@ const Dashboard = ({ user }) => {
             <Droplet size={24} color="var(--color-primary)" fill="var(--color-primary)" />
           </div>
           <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Blood Units</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {isHospital ? 'Hospital Blood Units' : 'Total Blood Units'}
+            </p>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '2px 0' }}>{cards?.totalBloodUnits?.toLocaleString() || '0'}</h3>
-            <span style={{ fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 'bold' }}>↑ 8.5% from last month</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 'bold' }}>
+              {isHospital ? `In ${hospName || 'hospital'} reserve` : '↑ 8.5% from last month'}
+            </span>
           </div>
         </div>
 
@@ -176,23 +188,29 @@ const Dashboard = ({ user }) => {
             <Users size={24} color="var(--color-info)" />
           </div>
           <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Active Donors</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {isHospital ? 'District Donors' : 'Active Donors'}
+            </p>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '2px 0' }}>{cards?.activeDonors?.toLocaleString() || '0'}</h3>
-            <span style={{ fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 'bold' }}>↑ 6.2% from last month</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 'bold' }}>
+              {isHospital ? `Available in ${hospDistrict || 'District'}` : '↑ 6.2% from last month'}
+            </span>
           </div>
         </div>
 
-        {/* Card 3: Registered Hospitals */}
-        <div className="dashboard-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '18px' }}>
-          <div style={{ backgroundColor: 'var(--color-success-light)', padding: '12px', borderRadius: '12px' }}>
-            <Building2 size={24} color="var(--color-success)" />
+        {/* Card 3: Registered Hospitals (Shown only for Admin, hidden for Hospital side) */}
+        {!isHospital && (
+          <div className="dashboard-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '18px' }}>
+            <div style={{ backgroundColor: 'var(--color-success-light)', padding: '12px', borderRadius: '12px' }}>
+              <Building2 size={24} color="var(--color-success)" />
+            </div>
+            <div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Registered Hospitals</p>
+              <h3 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '2px 0' }}>{cards?.registeredHospitals || '0'}</h3>
+              <span style={{ fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 'bold' }}>↑ 2 new this month</span>
+            </div>
           </div>
-          <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Registered Hospitals</p>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '2px 0' }}>{cards?.registeredHospitals || '0'}</h3>
-            <span style={{ fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 'bold' }}>↑ 2 new this month</span>
-          </div>
-        </div>
+        )}
 
         {/* Card 4: Emergency Requests */}
         <div className="dashboard-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '18px' }}>
@@ -200,9 +218,13 @@ const Dashboard = ({ user }) => {
             <AlertTriangle size={24} color="var(--color-warning)" />
           </div>
           <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Emergency Requests</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {isHospital ? 'Hospital Emergency Requests' : 'Emergency Requests'}
+            </p>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '2px 0' }}>{cards?.emergencyRequests || '0'}</h3>
-            <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 'bold' }}>↑ {cards?.emergencyRequests || '0'} active requests</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+              {isHospital ? 'Active for this hospital' : `↑ ${cards?.emergencyRequests || '0'} active requests`}
+            </span>
           </div>
         </div>
 
@@ -214,7 +236,9 @@ const Dashboard = ({ user }) => {
           <div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Expiring Soon</p>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '2px 0' }}>{cards?.expiringSoon || '0'}</h3>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-light)' }}>Units within 7 days</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-light)' }}>
+              {isHospital ? 'Hospital units within 7 days' : 'Units within 7 days'}
+            </span>
           </div>
         </div>
 
@@ -224,9 +248,13 @@ const Dashboard = ({ user }) => {
             <ShieldAlert size={24} color="var(--color-danger)" />
           </div>
           <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Critical Shortages</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {isHospital ? 'Critical Blood Groups' : 'Critical Shortages'}
+            </p>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '2px 0' }}>{cards?.criticalShortages || '0'}</h3>
-            <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 'bold' }}>Districts at risk</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+              {isHospital ? 'Blood groups low in hospital' : 'Districts at risk'}
+            </span>
           </div>
         </div>
       </div>
@@ -236,7 +264,9 @@ const Dashboard = ({ user }) => {
         {/* Left: Blood Stock by Blood Group */}
         <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="flex-between" style={{ marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Blood Stock by Blood Group</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+              {isHospital ? 'Hospital Blood Stock by Group' : 'Blood Stock by Blood Group'}
+            </h3>
             <button onClick={() => navigate('/inventory')} style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span>Inventory</span>
               <ArrowRight size={12} />
@@ -244,8 +274,10 @@ const Dashboard = ({ user }) => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, justifyContent: 'space-between' }}>
             {Object.keys(bloodGroupStock || {}).map((group) => {
-              const units = bloodGroupStock[group];
-              const maxScale = 500; // scale standard max unit limit
+              const units = bloodGroupStock[group] || 0;
+              const allUnits = Object.values(bloodGroupStock || {});
+              const maxUnitVal = Math.max(...allUnits, 1);
+              const maxScale = isHospital ? Math.max(60, maxUnitVal) : 500;
               const percentage = Math.min(100, (units / maxScale) * 100);
 
               return (
@@ -441,7 +473,9 @@ const Dashboard = ({ user }) => {
         {/* Center: Recent Emergency Requests */}
         <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="flex-between" style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Recent Emergency Requests</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+              {isHospital ? 'Hospital Emergency Requests' : 'Recent Emergency Requests'}
+            </h3>
             <button onClick={() => navigate('/requests')} style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600 }}>
               View All
             </button>
@@ -475,7 +509,9 @@ const Dashboard = ({ user }) => {
         {/* Right: Recent Donations */}
         <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="flex-between" style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Recent Donations</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+              {isHospital ? `${hospDistrict || 'District'} Recent Donations` : 'Recent Donations'}
+            </h3>
             <button onClick={() => navigate('/donors')} style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600 }}>
               View All
             </button>
